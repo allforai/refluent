@@ -9,8 +9,9 @@ filtered, and (asynchronously) checked by a small model you point it at. A singl
 corrective line appears on your status line, and the underlying knowledge points come
 back later as production questions in `refluent review`.
 
-Nothing is written back into the agent's context, and all learner data stays on this
-machine.
+Nothing is written back into the agent's context. The database that holds your knowledge
+points stays on your machine; the only thing that leaves it is the filtered text of a
+message you sent (see [Data and privacy](#data-and-privacy)).
 
 ## Requirements
 
@@ -26,6 +27,14 @@ machine.
 npm ci
 npm run build          # bin/ and hooks/ load dist/
 node bin/refluent install
+```
+
+Every command below is shown as `node bin/refluent ...`, which works from the repository
+root without any extra setup. To get a short `refluent` command instead, put it on your
+PATH once (optional):
+
+```sh
+npm link               # or: npm install -g .
 ```
 
 `install` asks for consent, then merges the three hooks into your Claude Code settings,
@@ -48,8 +57,8 @@ export REFLUENT_MODEL="some-small-model"
 export REFLUENT_MODEL_API_KEY="..."                           # optional
 ```
 
-Restart Claude Code so the hooks pick up the environment. `refluent settings` shows the
-endpoint status and capture state at any time.
+Restart Claude Code so the hooks pick up the environment. `node bin/refluent settings`
+shows the endpoint status and capture state at any time.
 
 ## Use
 
@@ -58,12 +67,13 @@ Nothing to remember during a conversation:
 - **Every message you send** is captured and filtered. Code, logs, stack traces, bare
   commands and short imperatives are dropped before anything reaches the model.
 - **The status line** shows at most one suggestion:
-  `refluent: <your sentence> → <better phrasing> (<why>)`. It alternates with your own
-  wrapped status line, and a suggestion expires after 15 minutes.
+  `refluent: <your sentence> → <better phrasing> (<why>)`. Your own wrapped status line is
+  printed first and refluent's line is appended below it; a suggestion expires after
+  15 minutes.
 - **Session start** shows you one line: `refluent: N review item(s) ... are due. Run
   \`refluent review\` in a terminal.` It is sent as a JSON `systemMessage`, so it is
   visible to you and never injected into the agent's context. It does not call the model.
-- **`refluent review`** asks production questions drawn from your own sentences —
+- **`node bin/refluent review`** asks production questions drawn from your own sentences —
   Chinese→English, rewriting your own sentence, and fill-in — and feeds your answers
   back through the same correction pipeline. Grammar-rule answers are left ungraded
   (schedule untouched) when the model is unavailable.
@@ -79,11 +89,15 @@ node bin/refluent settings reset
 
 ## Data and privacy
 
-- All learner data lives in one user-level SQLite database: `~/.refluent/analysis-and-data.sqlite`.
-  Override the directory with `REFLUENT_DATA_DIR`. Nothing is written inside a repository.
-- Deleting `~/.refluent` removes everything; there is no server copy.
-- Only filtered natural-language text is ever sent to your endpoint. Source code, logs
-  and error output are stripped (or replaced with a `[code]` placeholder) before the request.
+- Your learner data — messages, filtered text, knowledge points and settings — lives in one
+  user-level SQLite database: `~/.refluent/analysis-and-data.sqlite`. Override the directory
+  with `REFLUENT_DATA_DIR`. Nothing is written inside a repository.
+- Deleting `~/.refluent` removes that local data; the product keeps no server-side copy.
+- **The analysis is remote.** For each message worth analysing, its *filtered* text is sent
+  to the OpenAI-compatible endpoint you configure, and the endpoint's reply is used to build
+  the suggestion. Anything you do not configure an endpoint for stays local.
+- Only filtered natural-language text is sent. Source code, logs and error output are
+  stripped, or replaced with a `[code]` placeholder, before the request.
 
 ## Test
 
@@ -108,11 +122,13 @@ To try the hooks yourself without touching your real Claude Code configuration:
 
 ```sh
 TMP=$(mktemp -d)
-cp -p ~/.claude/.credentials.json "$TMP/" 2>/dev/null || true
 REFLUENT_DATA_DIR="$TMP/data" REFLUENT_CLAUDE_SETTINGS="$TMP/settings.json" node bin/refluent install --yes
 printf '{"prompt":"Can you help me 看看 this bug?"}' | REFLUENT_DATA_DIR="$TMP/data" REFLUENT_CLAUDE_SETTINGS="$TMP/settings.json" node bin/refluent hook user-prompt-submit
 REFLUENT_DATA_DIR="$TMP/data" REFLUENT_CLAUDE_SETTINGS="$TMP/settings.json" node bin/refluent settings
 ```
+
+No Claude login is involved: this drives the CLI and the hook entrypoints directly, and
+writes only inside the temporary directory.
 
 ## Uninstall
 
@@ -127,11 +143,12 @@ remove the data too.
 ## Known limits
 
 - **Requires your own model endpoint.** With none configured, analysis fails silently by
-  design: nothing is suggested and nothing is stored.
-- **Display budget.** The status line is one bounded line (worst case 250 characters,
-  original and rewrite capped at 80 and the reason at 60). Anything longer is truncated,
-  and a redaction placeholder is never cut in half. On a very narrow pane the line still
-  wraps.
+  design: captured and stored locally with the failure recorded, but no suggestion and no
+  knowledge point are produced.
+- **Display budget.** The status line is one bounded, single-line, control-sequence-free
+  string (worst case 250 characters; original and rewrite capped at 80, the reason at 60).
+  Newlines, tabs and ANSI escapes are stripped, anything longer is truncated, and a
+  redaction placeholder is never cut in half. On a very narrow pane the line still wraps.
 - **`[code]` placeholders.** Filtered-out code appears as `[code]`, including inside
   review question context, which can read oddly for a sentence that was mostly code.
 - **Written English only.** Speech, pronunciation and rich formatting are out of scope.

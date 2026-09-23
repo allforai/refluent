@@ -43,10 +43,11 @@ function fail(line: string): void {
 
 export async function main(argv: string[]): Promise<number> {
   // A closed stdout (`refluent settings | head`, quitting `less` early) is a normal shell
-  // idiom, not an error. Without this guard Node turns the write into an unhandled EPIPE
-  // and the command exits with a stack trace instead of the user's own pipeline ending.
+  // idiom, not an error. Any other stdout write failure must still fail the command, so it
+  // is rethrown rather than swallowed by having installed a listener.
   process.stdout.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EPIPE') process.exit(0);
+    throw error;
   });
   const [command, ...rest] = argv;
   switch (command) {

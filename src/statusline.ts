@@ -61,8 +61,16 @@ export function latestSuggestion(db: DatabaseType): Suggestion | null {
   };
 }
 
+/** ANSI escape sequences and control characters: the line must never drive the terminal. */
+const ANSI_CSI_RE = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/g;
+
 function truncate(text: string, limit: number): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim();
+  const oneLine = text
+    .replace(ANSI_CSI_RE, '')
+    .replace(CONTROL_RE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (oneLine.length <= limit) return oneLine;
   let cut = oneLine.slice(0, limit - 1);
   // Never emit half a redaction placeholder. `[code]` is the filter's visible marker, so a

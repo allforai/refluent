@@ -157,6 +157,21 @@ describe('statusline: the line stays bounded so the rewrite keeps its place', ()
     expect(line).not.toMatch(/\[c…/);
   });
 
+  it('strips control characters and ANSI escapes so the line cannot drive the terminal', () => {
+    seedPoint(db, {
+      canonicalForm: 'look into',
+      originalText: 'Can you look\nthis bug',
+      rewrite: 'First line.\nSecond.\tTabbed.',
+      reason: 'one\u001b[31mRED\u001b[0m two',
+    });
+
+    const line = renderStatusline(db);
+    expect(line).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+    expect(line).toContain('Can you look this bug');
+    expect(line).toContain('First line. Second. Tabbed.');
+    expect(line).toContain('oneRED two');
+  });
+
   it('leaves a short suggestion byte-identical', () => {
     seedPoint(db, {
       canonicalForm: 'look into',
