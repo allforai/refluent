@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-09-23T15:03:19.058Z",
+  "generated_at": "2026-09-23T17:51:44.542Z",
   "harness": "scripts/verify-product-acceptance.mjs",
   "node_version": "v26.7.0",
-  "main_data_dir": "/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data",
+  "main_data_dir": "/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/data",
   "checks": [
     {
       "id": "install",
-      "command": "REFLUENT_DATA_DIR=/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data node bin/refluent install --yes",
+      "command": "REFLUENT_DATA_DIR=/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/data node bin/refluent install --yes",
       "exit_code": 0,
       "observed": "exit 0; stdout has \"endpoint status: ready\"=true",
       "verdict": "passed",
-      "detail": "refluent install\n  data directory : /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data\n  hook location  : /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/claude-settings.json\n  scope          : your outgoing Claude Code messages only — never agent replies, code or logs.\n  effect         : the message sent to the agent is never changed or delayed.\n  analysis model : configured via REFLUENT_MODEL_ENDPOINT / REFLUENT_MODEL_API_KEY / REFLUENT_MODEL.\n\n  Local data directory is writable: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data\n  Wrote the UserPromptSubmit and SessionStart hooks and the statusLine to: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/claude-settings.json\n  Claude Code has not run the hook yet: send any message there, then run `refluent settings` to confirm.\n  Only your outgoing messages are captured; agent replies, code and logs are never captured.\n  Analysis endpoint probe succeeded: ready.\n\n  hook status    : installed_not_loaded\n  endpoint status: ready\n  capture        : enabled\n  next           : send your next message in Claude Code to see the first suggestion.\n"
+      "detail": "refluent install\n  agent          : Claude Code (claude-code)\n  data directory : /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/data\n  hook location  : /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/claude-settings.json\n  scope          : your outgoing Claude Code messages only — never agent replies, code or logs.\n  effect         : the message sent to the agent is never changed or delayed.\n  analysis model : configured via REFLUENT_MODEL_ENDPOINT / REFLUENT_MODEL_API_KEY / REFLUENT_MODEL.\n\n  Local data directory is writable: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/data\n  Wrote the UserPromptSubmit and SessionStart hooks and the statusLine to: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/claude-settings.json\n  Claude Code has not run the hook yet: send any message there, then run `refluent settings` to confirm.\n  Only your outgoing messages are captured; agent replies, code and logs are never captured.\n  Saved the analysis endpoint and model locally (http://127.0.0.1:56752/v1), so hooks do not depend on your shell profile.\n  Analysis endpoint probe succeeded: ready.\n  No analysis API key is reachable from this shell: name a variable that Claude Code passes to its hooks, e.g. `refluent settings set model-api-key-env OPENROUTER_API_KEY`.\n\n  hook status    : installed_not_loaded\n  endpoint status: ready\n  capture        : enabled\n  next           : send your next message in Claude Code to see the first suggestion.\n"
     },
     {
       "id": "target-users-surfaces",
@@ -18,7 +18,7 @@
       "exit_code": 0,
       "observed": "tables=[analysis_jobs,instance_knowledge_points,instances,knowledge_points,review_answers,review_questions,review_states,schema_migrations,settings,sqlite_sequence]; lesson/catalog table present=false; help lists course commands=false",
       "verdict": "passed",
-      "detail": "refluent — learn English phrasing from your own coding-agent messages.\n\nCommands:\n  refluent install [--yes|--no]      authorize hooks and check the analysis endpoint\n  refluent uninstall                  remove the hooks and restore your own statusLine\n  refluent settings [show]           show switches and real enablement state\n  refluent settings set <key> <val>  change a switch\n  refluent settings reset            restore defaults\n  refluent review                    answer due production questions\n  refluent hook <name>               hook entrypoint (user-prompt-submit|session-start|statusline)\n  refluent analyze-job <id>          run one queued analysis job\n\nLocal data: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data/analysis-and-data.sqlite\nClaude Code settings: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/claude-settings.json\n"
+      "detail": "refluent — learn English phrasing from your own coding-agent messages.\n\nCommands:\n  refluent install [--yes|--no]      authorize hooks and check the analysis endpoint\n  refluent install --agent <id>       target claude-code (default), codex or pi\n  refluent uninstall [--agent <id>]   remove the hooks (or the Pi extension)\n  refluent settings [show]           show switches and real enablement state\n  refluent settings set <key> <val>  change a switch\n  refluent settings set model-endpoint <url>   analysis base URL, stored locally\n  refluent settings set model <id>             analysis model id, stored locally\n  refluent settings set model-api-key-env <VAR> read the API key from this env var\n  refluent settings set statusline-original off  drop your own sentence from the status line\n  refluent settings reset            restore defaults\n  refluent review                    answer due production questions\n  refluent hook <name> [--agent <id>] hook entrypoint (user-prompt-submit|session-start|statusline)\n  refluent analyze-job <id> [--agent <id>] run one queued analysis job\n\nLocal data: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/data/analysis-and-data.sqlite\nClaude Code settings: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/claude-settings.json\n"
     },
     {
       "id": "capture-filtered-no-action",
@@ -34,7 +34,7 @@
       "exit_code": null,
       "observed": "raw_text byte-for-byte equal=true; filtered_text=\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\"; status=done; skip_reason=null",
       "verdict": "passed",
-      "detail": "{\"id\":1,\"message_id\":\"msg-1\",\"session_id\":\"session-1\",\"raw_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"filtered_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"skip_reason\":null,\"status\":\"done\",\"error\":null,\"created_at\":\"2026-09-23T15:03:16.883Z\",\"finished_at\":\"2026-09-23T15:03:16.902Z\",\"latency_ms\":17}"
+      "detail": "{\"id\":1,\"message_id\":\"msg-1\",\"session_id\":\"session-1\",\"raw_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"filtered_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"skip_reason\":null,\"status\":\"done\",\"error\":null,\"created_at\":\"2026-09-23T17:51:41.830Z\",\"finished_at\":\"2026-09-23T17:51:41.849Z\",\"latency_ms\":17}"
     },
     {
       "id": "suggestion-produced-stored",
@@ -42,15 +42,23 @@
       "exit_code": null,
       "observed": "instances for job=1; issue_class=chinese_code_mixing; rewrite=\"Can you help me look into this bug? I already fixed it, but the test still fails.\"; reason=\"Mixed Chinese with English; use the natural phrasal verb.\"; kp.canonical_form=look into",
       "verdict": "passed",
-      "detail": "{\"inst1\":[{\"id\":1,\"analysis_job_id\":1,\"original_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"rewrite_text\":\"Can you help me look into this bug? I already fixed it, but the test still fails.\",\"reason\":\"Mixed Chinese with English; use the natural phrasal verb.\",\"issue_class\":\"chinese_code_mixing\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"source\":\"claude-code:UserPromptSubmit\",\"message_id\":\"msg-1\",\"session_id\":\"session-1\",\"model\":\"fake-model\",\"model_version\":\"fake-model\",\"filter_version\":\"filter-v2\"}],\"kp1\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":1,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:16.902Z\"}}"
+      "detail": "{\"inst1\":[{\"id\":1,\"analysis_job_id\":1,\"original_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"rewrite_text\":\"Can you help me look into this bug? I already fixed it, but the test still fails.\",\"reason\":\"Mixed Chinese with English; use the natural phrasal verb.\",\"issue_class\":\"chinese_code_mixing\",\"created_at\":\"2026-09-23T17:51:41.850Z\",\"source\":\"claude-code:UserPromptSubmit\",\"message_id\":\"msg-1\",\"session_id\":\"session-1\",\"model\":\"fake-model\",\"model_version\":\"fake-model\",\"filter_version\":\"filter-v2\"}],\"kp1\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":1,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T17:51:41.850Z\",\"updated_at\":\"2026-09-23T17:51:41.850Z\"}}"
     },
     {
       "id": "suggestion-produced-stored",
       "command": "node bin/refluent hook statusline",
       "exit_code": 0,
-      "observed": "stdout=\"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\"",
+      "observed": "stdout=\"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\"",
       "verdict": "passed",
-      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+    },
+    {
+      "id": "pi-statusline-drops-the-original",
+      "command": "node bin/refluent hook statusline --agent pi (same suggestion)",
+      "exit_code": 0,
+      "observed": "claude-code=\"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\" pi=\"refluent: Can you help me look into this bug? I… (Mixed Chinese with English; use the natural…)\"",
+      "verdict": "passed",
+      "detail": "refluent: Can you help me look into this bug? I… (Mixed Chinese with English; use the natural…)\n"
     },
     {
       "id": "capture-filtered-no-action",
@@ -80,9 +88,9 @@
       "id": "first-value-no-course",
       "command": "install --yes then one hook message then statusline (no lesson step)",
       "exit_code": 0,
-      "observed": "after install + 1 captured message the statusLine already shows: \"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\"",
+      "observed": "after install + 1 captured message the statusLine already shows: \"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\"",
       "verdict": "passed",
-      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
     },
     {
       "id": "one-suggestion-original-rewrite-why",
@@ -90,7 +98,7 @@
       "exit_code": null,
       "observed": "one instance for job=1; statusline has original→rewrite(reason)=true; model returned 2 issues but stored issue_class=chinese_code_mixing",
       "verdict": "passed",
-      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
     },
     {
       "id": "kp-canonical-review-state",
@@ -98,7 +106,7 @@
       "exit_code": null,
       "observed": "kp.canonical_form=\"look into\"; kp.match_key=\"expression-unit:look into\"; review_states.state=new; reps=0",
       "verdict": "passed",
-      "detail": "{\"kp1\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":1,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:16.902Z\"},\"rs\":{\"knowledge_point_id\":1,\"due_at\":\"2026-09-23T15:03:16.902Z\",\"state\":\"new\",\"stability\":null,\"difficulty\":null,\"reps\":0,\"lapses\":0,\"last_review_at\":null,\"last_rating\":null,\"scheduler\":\"fsrs-5\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:16.902Z\"}}"
+      "detail": "{\"kp1\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":1,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T17:51:41.850Z\",\"updated_at\":\"2026-09-23T17:51:41.850Z\"},\"rs\":{\"knowledge_point_id\":1,\"due_at\":\"2026-09-23T17:51:41.850Z\",\"state\":\"new\",\"stability\":null,\"difficulty\":null,\"reps\":0,\"lapses\":0,\"last_review_at\":null,\"last_rating\":null,\"scheduler\":\"fsrs-5\",\"created_at\":\"2026-09-23T17:51:41.850Z\",\"updated_at\":\"2026-09-23T17:51:41.850Z\"}}"
     },
     {
       "id": "recurrence-links-not-duplicate",
@@ -106,7 +114,7 @@
       "exit_code": 0,
       "observed": "knowledge_points 3->3; occurrence_count=2; link role=recurrence",
       "verdict": "passed",
-      "detail": "{\"kpAfter\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":2,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:17.286Z\"},\"link4\":{\"role\":\"recurrence\"}}"
+      "detail": "{\"kpAfter\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":2,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T17:51:41.850Z\",\"updated_at\":\"2026-09-23T17:51:42.369Z\"},\"link4\":{\"role\":\"recurrence\"}}"
     },
     {
       "id": "code-stripped-before-model",
@@ -128,9 +136,17 @@
       "id": "statusline-bounded-and-placeholder-safe",
       "command": "node bin/refluent hook statusline with a long suggestion and with 12 [code] placeholders",
       "exit_code": 0,
-      "observed": "long-line chars=250 (narrow 40-col rows=7); placeholder-line chars=143; '[' count=7 vs complete '[code]' count=7",
+      "observed": "long-line chars=237 (narrow 40-col rows=6); placeholder-line chars=143; '[' count=7 vs complete '[code]' count=7",
       "verdict": "passed",
-      "detail": "refluent: Please xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx the call at… → Can you help me look into this bug? I already fixed it, but the test still fail… (Chinglish 搭配: Mixed Chinese with English; prefer the natural phrasal verb…)\nrefluent: [code] and [code] and [code] and [code] and [code] and [code] and [code] and… → Keep the sentence natural. (Chinglish 搭配: Chinglish.)"
+      "detail": "refluent: Please xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx the call… → Can you help me look into this bug? I already fixed it, but the test still… (Chinglish 搭配: Mixed Chinese with English; prefer the natural phrasal…)\nrefluent: [code] and [code] and [code] and [code] and [code] and [code] and [code] and… → Keep the sentence natural. (Chinglish 搭配: Chinglish.)"
+    },
+    {
+      "id": "statusline-fits-a-narrow-pane",
+      "command": "REFLUENT_TERMINAL_COLUMNS=67 node bin/refluent hook statusline (same long suggestion)",
+      "exit_code": 0,
+      "observed": "width=62 of 63 columns; original dropped=true; rewrite kept=true; reason kept=true; line=\"refluent: Can you help me look… (Mixed Chinese with English;…)\"",
+      "verdict": "passed",
+      "detail": "refluent: Can you help me look… (Mixed Chinese with English;…)"
     },
     {
       "id": "review-answer-feedback-loop",
@@ -146,7 +162,7 @@
       "exit_code": 0,
       "observed": "types=[zh-to-en,rewrite-original,fill-in]; all questions have original context=true; contexts=[\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"She go to the office every day and the build fail on her machine.\",\"Yesterday I go to the meeting and I tell them about the plan.\"]",
       "verdict": "passed",
-      "detail": "[{\"id\":1,\"knowledge_point_id\":1,\"type\":\"zh-to-en\",\"prompt\":\"用英文表达：请帮我看看这个登录 bug。\",\"expected\":\"look into\",\"context_instance_id\":1,\"generated_at\":\"2026-09-23T15:03:17.508Z\",\"model\":\"fake-model\",\"status\":\"answered\"},{\"id\":2,\"knowledge_point_id\":2,\"type\":\"rewrite-original\",\"prompt\":\"Rewrite naturally: \\\"He run the tests every morning.\\\"\",\"expected\":\"third-person singular -s\",\"context_instance_id\":2,\"generated_at\":\"2026-09-23T15:03:17.510Z\",\"model\":\"fake-model\",\"status\":\"answered\"},{\"id\":3,\"knowledge_point_id\":3,\"type\":\"fill-in\",\"prompt\":\"Write the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\",\"expected\":\"past tense verb form\",\"context_instance_id\":3,\"generated_at\":\"2026-09-23T15:03:17.512Z\",\"model\":null,\"status\":\"answered\"}]"
+      "detail": "[{\"id\":1,\"knowledge_point_id\":1,\"type\":\"zh-to-en\",\"prompt\":\"用英文表达：请帮我看看这个登录 bug。\",\"expected\":\"look into\",\"context_instance_id\":1,\"generated_at\":\"2026-09-23T17:51:42.725Z\",\"model\":\"fake-model\",\"status\":\"answered\"},{\"id\":2,\"knowledge_point_id\":2,\"type\":\"rewrite-original\",\"prompt\":\"Rewrite naturally: \\\"He run the tests every morning.\\\"\",\"expected\":\"third-person singular -s\",\"context_instance_id\":2,\"generated_at\":\"2026-09-23T17:51:42.730Z\",\"model\":\"fake-model\",\"status\":\"answered\"},{\"id\":3,\"knowledge_point_id\":3,\"type\":\"fill-in\",\"prompt\":\"Write the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\",\"expected\":\"past tense verb form\",\"context_instance_id\":3,\"generated_at\":\"2026-09-23T17:51:42.731Z\",\"model\":null,\"status\":\"answered\"}]"
     },
     {
       "id": "privacy-no-code-logs-errors",
@@ -160,9 +176,9 @@
       "id": "local-offline-readable",
       "command": "stop model endpoint, unset REFLUENT_MODEL_*, then hook statusline + review",
       "exit_code": 0,
-      "observed": "db file=/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data/analysis-and-data.sqlite exists=true; offline statusline=\"refluent: Can you help me look this bug in my code → Can you help me look into this bug? (Chinglish 搭配: Use the phrasal verb 'look into'.)\"; offline review exit=0",
+      "observed": "db file=/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-XQ4b0i/data/analysis-and-data.sqlite exists=true; offline statusline=\"refluent: Can you help me look this bug in my code → Can you help me look into this bug? (Chinglish 搭配: Use the phrasal verb 'look into'.)\"; offline review exit=0",
       "verdict": "passed",
-      "detail": "refluent: Can you help me look this bug in my code → Can you help me look into this bug? (Chinglish 搭配: Use the phrasal verb 'look into'.)\n---\nrefluent review: 1 question(s) from your own sentences.\n\nQuestion 1/1 [fill-in]\nWrite the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\n  Context: \"Yesterday I go to the meeting and I tell them about the plan.\"\nYour answer (or press Enter to skip, q to quit): \nSession: 0 answered, 0 correct.\n"
+      "detail": "refluent: Can you help me look this bug in my code → Can you help me look into this bug? (Chinglish 搭配: Use the phrasal verb 'look into'.)\n---\nrefluent review: 1 question(s) from your own sentences.\n\nQuestion 1/1 [fill-in]\nWrite the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\n  Context: \"Yesterday I go to the meeting and I tell them about the plan.\"\nYour answer (or press Enter to skip, q to quit): "
     },
     {
       "id": "failed-analysis-no-effect",
@@ -170,15 +186,23 @@
       "exit_code": 0,
       "observed": "exit=0; stdout=0B; stderr=0B; job.status=failed; instances=0",
       "verdict": "passed",
-      "detail": "{\"id\":1,\"message_id\":\"fail-1\",\"session_id\":\"session-1\",\"raw_text\":\"Can you help me look this bug? I want the phrasing to read naturally.\",\"filtered_text\":\"Can you help me look this bug? I want the phrasing to read naturally.\",\"skip_reason\":null,\"status\":\"failed\",\"error\":\"analysis_unavailable\",\"created_at\":\"2026-09-23T15:03:18.834Z\",\"finished_at\":\"2026-09-23T15:03:18.849Z\",\"latency_ms\":14}"
+      "detail": "{\"id\":1,\"message_id\":\"fail-1\",\"session_id\":\"session-1\",\"raw_text\":\"Can you help me look this bug? I want the phrasing to read naturally.\",\"filtered_text\":\"Can you help me look this bug? I want the phrasing to read naturally.\",\"skip_reason\":null,\"status\":\"failed\",\"error\":\"http_error_500\",\"created_at\":\"2026-09-23T17:51:44.099Z\",\"finished_at\":\"2026-09-23T17:51:44.126Z\",\"latency_ms\":25}"
     },
     {
       "id": "slow-analysis-no-delay",
       "command": "endpoint delays 6000ms; detached analysis (no REFLUENT_INLINE_ANALYSIS); node bin/refluent hook user-prompt-submit",
       "exit_code": 0,
-      "observed": "hook elapsed=39ms while the model endpoint delays 6000ms; exit=0; stdout=0B; job was queued for detached analysis status=queued",
+      "observed": "hook elapsed=49ms while the model endpoint delays 6000ms; exit=0; stdout=0B; job was queued for detached analysis status=queued",
       "verdict": "passed",
-      "detail": "{\"slowHook\":{\"code\":0,\"stdout\":\"\",\"stderr\":\"\",\"stdoutBytes\":0,\"stderrBytes\":0,\"elapsedMs\":39},\"slowJob\":{\"status\":\"queued\"}}"
+      "detail": "{\"slowHook\":{\"code\":0,\"stdout\":\"\",\"stderr\":\"\",\"stdoutBytes\":0,\"stderrBytes\":0,\"elapsedMs\":49},\"slowJob\":{\"status\":\"queued\"}}"
+    },
+    {
+      "id": "codex-capture-through-its-own-adapter",
+      "command": "CODEX_HOME=<account home> node bin/refluent install --agent codex --yes, then hook user-prompt-submit --agent codex",
+      "exit_code": 0,
+      "observed": "hooks written under CODEX_HOME=true; kept the other agent's hook=true; wrote no statusLine=true; recorded origin=codex:UserPromptSubmit",
+      "verdict": "passed",
+      "detail": "{\"hooks\":{\"PreToolUse\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/orca/codex-hook.sh\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook user-prompt-submit --agent codex\"}]}],\"SessionStart\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook session-start --agent codex\"}]}]}}"
     },
     {
       "id": "uninstall-restores-user-settings",
@@ -186,7 +210,7 @@
       "exit_code": 0,
       "observed": "install exit=0; installed statusLine wraps refluent=true; after uninstall model=opus; statusLine restored=true; 'hooks' key present=false",
       "verdict": "passed",
-      "detail": "{\"wrapped\":{\"model\":\"opus\",\"statusLine\":{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook statusline\"},\"hooks\":{\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook user-prompt-submit\"}]}],\"SessionStart\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook session-start\"}]}]}},\"restored\":{\"model\":\"opus\",\"statusLine\":{\"type\":\"command\",\"command\":\"/opt/mine/statusline.sh\",\"padding\":0}}}"
+      "detail": "{\"wrapped\":{\"model\":\"opus\",\"statusLine\":{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook statusline --agent claude-code\"},\"hooks\":{\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook user-prompt-submit --agent claude-code\"}]}],\"SessionStart\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook session-start --agent claude-code\"}]}]}},\"restored\":{\"model\":\"opus\",\"statusLine\":{\"type\":\"command\",\"command\":\"/opt/mine/statusline.sh\",\"padding\":0}}}"
     },
     {
       "id": "closed-stdout-no-crash",
