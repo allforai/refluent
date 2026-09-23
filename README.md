@@ -193,9 +193,18 @@ remove the data too.
   `refluent settings` names the sanitized reason, so a missing configuration, a rejected
   key and a timeout are distinguishable.
 - **Display budget.** The status line is one bounded, single-line, control-sequence-free
-  string (worst case 250 characters; original and rewrite capped at 80, the reason at 60).
-  Newlines, tabs and ANSI escapes are stripped, anything longer is truncated, and a
-  redaction placeholder is never cut in half. On a very narrow pane the line still wraps.
+  string (worst case 250 characters; original and rewrite capped at 80 columns, the reason
+  at 60). Newlines, tabs and ANSI escapes are stripped, a redaction placeholder is never
+  cut in half, and a cut prefers a word boundary.
+- **Narrow panes.** Claude Code truncates an over-wide status line with `…` instead of
+  wrapping, and it does not tell the command how wide the pane is. refluent therefore reads
+  the width from the agent's own TTY (`ps -o tty=` + `stty -f`), and when the full form does
+  not fit it gives up the *least* useful part first: the redundant issue-class label, then
+  the user's own sentence (already in the transcript), and only then the reason. The
+  rewrite and the reason survive as long as possible. Widths are in terminal columns, so a
+  CJK label counts as two. If the width cannot be discovered, the bounded form is used
+  unchanged. Two known limits remain upstream: multi-line output is dropped to one line on
+  macOS, and an over-wide line is never wrapped.
 - **`[code]` placeholders.** Filtered-out code appears as `[code]`, including inside
   review question context, which can read oddly for a sentence that was mostly code.
 - **Written English only.** Speech, pronunciation and rich formatting are out of scope.

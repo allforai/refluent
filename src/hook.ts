@@ -7,7 +7,8 @@ import { captureMessage, runAnalysis } from './capture.js';
 import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
 import { renderDueNotice } from './review.js';
-import { renderStatusline } from './statusline.js';
+import { renderStatusline, statuslineBudget } from './statusline.js';
+import { detectTerminalWidth } from './terminal-width.js';
 import { wrappedStatusLineCommand } from './install.js';
 
 export type HookName = 'user-prompt-submit' | 'session-start' | 'statusline';
@@ -28,6 +29,8 @@ export interface HookDeps {
   inlineAnalysis?: boolean;
   /** Runs the user's wrapped statusLine command with the hook input on stdin. */
   runStatusCommand?: (command: string, input: string) => string;
+  /** Injected for tests; null means "no terminal width known". */
+  terminalColumns?: number | null;
 }
 
 function runStatusCommand(command: string, input: string): string {
@@ -147,7 +150,12 @@ export async function handleStatusline(inputText: string, deps: HookDeps): Promi
     // The wrapped command is best-effort; refluent's own line still renders.
   }
   try {
-    const line = renderStatusline(deps.db);
+    // Claude Code truncates an over-wide status line instead of wrapping, so the
+    // line is fitted to the pane it will be rendered into.
+    const columns = deps.terminalColumns === undefined ? detectTerminalWidth() : deps.terminalColumns;
+    const line = renderStatusline(deps.db, new Date(), {
+      maxColumns: columns === null || columns === undefined ? null : statuslineBudget(columns),
+    });
     if (line) lines.push(line);
   } catch {
     // Silent by design.

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { memoryDb, seedPoint } from './helpers.js';
 import type { DatabaseType } from '../src/db.js';
 import { getSetting, setLastAnalysisResult, setSetting } from '../src/settings.js';
-import { renderStatusline, STATUSLINE_TTL_MS } from '../src/statusline.js';
+import { renderStatusline, statuslineBudget, displayWidth, STATUSLINE_TTL_MS } from '../src/statusline.js';
 import { handleStatusline } from '../src/hook.js';
 import { runInstall, runUninstall, WRAPPED_STATUSLINE_KEY } from '../src/install.js';
 
@@ -122,6 +122,92 @@ describe('uninstall: a settings file returns to what the user had', () => {
     expect(saved.hooks.PostToolUse).toEqual(theirs.hooks);
     expect(saved.hooks.UserPromptSubmit).toEqual(theirs.hooks);
     expect(JSON.stringify(saved)).not.toContain('refluent');
+  });
+});
+
+describe('statusline: the line is fitted to the pane that renders it', () => {
+  it('counts CJK glyphs as two columns', () => {
+    expect(displayWidth('语法错误')).toBe(8);
+    expect(displayWidth('abc')).toBe(3);
+    // Ambiguous-width arrows count as one column, which is what Claude Code's
+    // own width table does with U+2192.
+    expect(displayWidth('→')).toBe(1);
+  });
+
+  it('keeps the whole reason by dropping the original when the pane is narrow', () => {
+    seedPoint(db, {
+      canonicalForm: 'stopped',
+      issueClass: 'grammar_error',
+      originalText: 'why is it breking？',
+      rewrite: 'Why is it broken?',
+      reason: 'Incorrect verb form used here.',
+    });
+
+    const wide = renderStatusline(db, new Date(), { maxColumns: statuslineBudget(137) });
+    expect(wide).toBe(
+      'refluent: why is it breking？ → Why is it broken? (语法错误: Incorrect verb form used here.)',
+    );
+
+    // A 67-column pane is a real one (measured from a live Claude Code TTY):
+    // the old line was cut to "(语法错误: I…", losing the reason entirely.
+    const narrow = renderStatusline(db, new Date(), { maxColumns: statuslineBudget(67) });
+    expect(narrow).toBe('refluent: Why is it broken? (Incorrect verb form used here.)');
+    expect(displayWidth(narrow)).toBeLessThanOrEqual(statuslineBudget(67));
+  });
+
+  it('never exceeds the budget, and keeps the rewrite visible when it must cut', () => {
+    seedPoint(db, {
+      canonicalForm: 'look into',
+      originalText: `${'x'.repeat(120)} look this bug`,
+      rewrite: `${'y'.repeat(120)} look into this bug`,
+      reason: 'z'.repeat(120),
+    });
+
+    for (const columns of [40, 50, 67, 80, 100, 137]) {
+      const budget = statuslineBudget(columns);
+      const line = renderStatusline(db, new Date(), { maxColumns: budget });
+      expect(displayWidth(line), `pane ${columns}`).toBeLessThanOrEqual(budget);
+      expect(line).toContain('yy');
+    }
+  });
+
+  it('cuts a long field at a word boundary so the tail reads as words', () => {
+    seedPoint(db, {
+      canonicalForm: 'shape traffic',
+      originalText: `${'x'.repeat(150)} traffic shaping`,
+      rewrite: 'The system does not need to shape its own traffic.',
+      reason: 'Chinese mixed with English can confuse readers.',
+    });
+    const line = renderStatusline(db, new Date(), { maxColumns: statuslineBudget(67) });
+    expect(line).toBe('refluent: The system does not… (Chinese mixed with English…)');
+  });
+
+  it('leaves the line unchanged when the width is unknown', () => {
+    seedPoint(db, {
+      canonicalForm: 'look into',
+      originalText: 'Can you help me look this bug?',
+      rewrite: 'Can you look into this bug?',
+      reason: 'natural verb',
+    });
+    expect(renderStatusline(db, new Date(), { maxColumns: null })).toBe(
+      renderStatusline(db),
+    );
+  });
+
+  it('fits the line to the width the hook discovered', async () => {
+    seedPoint(db, {
+      canonicalForm: 'stopped',
+      issueClass: 'grammar_error',
+      originalText: 'why is it breking？',
+      rewrite: 'Why is it broken?',
+      reason: 'Incorrect verb form used here.',
+    });
+
+    const narrow = await handleStatusline('{}', { db, terminalColumns: 67, runStatusCommand: () => '' });
+    expect(narrow.stdout.trimEnd()).toBe('refluent: Why is it broken? (Incorrect verb form used here.)');
+
+    const wide = await handleStatusline('{}', { db, terminalColumns: 137, runStatusCommand: () => '' });
+    expect(wide.stdout.trimEnd()).toContain('why is it breking？ → Why is it broken?');
   });
 });
 

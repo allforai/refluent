@@ -17,6 +17,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
+// The rendered column width is asserted exactly, so it comes from the same code the
+// product uses (requires `npm run build`, which the harness already depends on).
+import { displayWidth } from '../dist/statusline.js';
 
 const PROJECT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const BIN = path.join(PROJECT, 'bin', 'refluent');
@@ -300,6 +303,11 @@ async function main() {
     REFLUENT_MODEL_ENDPOINT: server.endpoint,
     REFLUENT_MODEL: 'fake-model',
     REFLUENT_INLINE_ANALYSIS: '1',
+    // The status line is fitted to the pane it will be rendered into, and this
+    // harness has no pane. Pin the width so the bounded shape below is asserted
+    // deterministically instead of depending on whatever TTY ran the tests; the
+    // fitted shape is asserted separately, with a pinned narrow width.
+    REFLUENT_TERMINAL_COLUMNS: 'off',
   };
 
   // --- First run: install (real consent + hook config + endpoint probe) -------
@@ -570,8 +578,41 @@ async function main() {
     `${longLine}\n${placeholderLine}`,
   );
 
-  const reviewRun = await runReviewInteractive(env, [
-    'Can you help me look this bug in my code',
+  // --- Narrow pane: the reason survives instead of being cut off ---------------
+  // Claude Code truncates an over-wide status line with `…` and never wraps, so on a
+  // narrow pane the line must give up the user's own sentence (already in the
+  // transcript) rather than cut the rewrite or the reason.
+  const narrowColumns = 67;
+  const narrowBudget = narrowColumns - 4;
+  // A fresh copy of the same long suggestion, so it is the latest one on the line.
+  db.prepare(
+    `INSERT INTO instances (analysis_job_id, original_text, rewrite_text, reason, issue_class, source, filter_version, created_at)
+     VALUES (NULL, ?, ?, ?, 'chinglish_collocation', 'refluent:capture', 'filter-v2', ?)`,
+  ).run(
+    longOriginal,
+    'Can you help me look into this bug? I already fixed it, but the test still fails because the parser returns undefined for the empty argument list.',
+    'Mixed Chinese with English; prefer the natural phrasal verb "look into" and keep the sentence in one clause.',
+    new Date().toISOString(),
+  );
+  const narrowLine = (
+    await run(['hook', 'statusline'], { env: { ...env, REFLUENT_TERMINAL_COLUMNS: String(narrowColumns) } })
+  ).stdout.trimEnd();
+  const narrowWidth = displayWidth(narrowLine);
+  record(
+    'statusline-fits-a-narrow-pane',
+    `REFLUENT_TERMINAL_COLUMNS=${narrowColumns} node bin/refluent hook statusline (same long suggestion)`,
+    0,
+    `width=${narrowWidth} of ${narrowBudget} columns; original dropped=${!narrowLine.includes('src/db.ts')}; rewrite kept=${narrowLine.includes('Can you help me')}; reason kept=${narrowLine.includes('Mixed Chinese')}; line="${narrowLine}"`,
+    narrowWidth <= narrowBudget &&
+    !narrowLine.includes('src/db.ts') &&
+    narrowLine.includes('Can you help me') &&
+    narrowLine.includes('Mixed Chinese')
+      ? 'passed'
+      : 'failed',
+    narrowLine,
+  );
+
+  const reviewRun = await runReviewInteractive(env, [    'Can you help me look this bug in my code',
     'He runs the tests every morning.',
     'went',
   ]);
