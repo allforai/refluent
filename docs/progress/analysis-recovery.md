@@ -118,6 +118,14 @@ removed and the learner DB verified back at its pre-probe counts
 Reproducible, isolated artifact (throwaway data dir, throwaway Claude settings, real
 endpoint): `docs/progress/analysis-recovery-evidence.json`.
 
+**Live production confirmation (not a probe).** After the fix and live configuration,
+the user's own Claude Code session produced a real hook run: `analysis_jobs` row 7 at
+`2026-09-23T15:39:22Z` (matching `hook_seen_at`), `status = done`, `latency_ms = 3269`,
+`last_analysis_result = suggestion_emitted`, one knowledge point written and one instance
+stored — through the installed entrypoint with the agent's own environment, in which
+`REFLUENT_MODEL*` is absent (0/5 agent processes) and `OPENROUTER_API_KEY` is present
+(5/5). Its text is not reproduced here.
+
 ## Verification
 
 - `npm run typecheck` clean; `npm run build` clean.
