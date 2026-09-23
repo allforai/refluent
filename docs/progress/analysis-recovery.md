@@ -83,6 +83,13 @@ node bin/refluent settings set model openai/gpt-4o-mini
 node bin/refluent settings set model-api-key-env OPENROUTER_API_KEY
 ```
 
+**Provenance, disclosed.** The endpoint (`https://openrouter.ai/api/v1`) and the key
+variable (`OPENROUTER_API_KEY`) are the user's own stated intent: they said they already
+have OpenRouter and rejected using a fake endpoint. The model id (`openai/gpt-4o-mini`) is
+the **earlier agent recommendation, not a user-selected model** — the user never named a
+model, only approved installing. No other service, model or credential was guessed or
+acquired. The coordinator confirmed keeping this endpoint/model as-is.
+
 The three `REFLUENT_MODEL_*` lines previously appended to `~/.zprofile` were **removed**
 (backup: `~/.zprofile.bak-refluent`); the key now has exactly one copy in the environment
 (`OPENROUTER_API_KEY`, already present in the agent's environment) and is read by name.
@@ -118,13 +125,38 @@ removed and the learner DB verified back at its pre-probe counts
 Reproducible, isolated artifact (throwaway data dir, throwaway Claude settings, real
 endpoint): `docs/progress/analysis-recovery-evidence.json`.
 
-**Live production confirmation (not a probe).** After the fix and live configuration,
-the user's own Claude Code session produced a real hook run: `analysis_jobs` row 7 at
-`2026-09-23T15:39:22Z` (matching `hook_seen_at`), `status = done`, `latency_ms = 3269`,
-`last_analysis_result = suggestion_emitted`, one knowledge point written and one instance
-stored — through the installed entrypoint with the agent's own environment, in which
-`REFLUENT_MODEL*` is absent (0/5 agent processes) and `OPENROUTER_API_KEY` is present
-(5/5). Its text is not reproduced here.
+**Live production confirmation (not a probe, and deliberately kept).** After the fix and
+live configuration, the user's own Claude Code session produced a real hook run:
+`analysis_jobs` row 7 at `2026-09-23T15:39:22Z` (matching `hook_seen_at`),
+`status = done`, `latency_ms = 3269`, `last_analysis_result = suggestion_emitted`, one
+knowledge point and one instance written — through the installed entrypoint with the
+agent's own environment, in which `REFLUENT_MODEL*` is absent (0/5 agent processes) and
+`OPENROUTER_API_KEY` is present (5/5). Row 7 was checked against the probe ids and is
+**not** synthetic (its `message_id` is a 36-character agent event id with a session id;
+the synthetic probes used `recovery-probe-*` / `isolated-proof-*` prefixes), so it is user
+data and was kept, along with the model settings. Its text is not reproduced here.
+
+The user-visible result replaces the warning with a real suggestion. Before:
+
+```
+refluent: analysis unavailable (run `refluent settings`)
+```
+
+After (read from the installed statusLine entrypoint, no `REFLUENT_*` in the environment):
+
+```
+refluent: [filtered sentence] → [rewrite] (中式夹英: …)
+```
+
+## User next action
+
+Nothing is required for the repair to take effect: the hooks execute
+`bin/refluent` from disk and resolve the stored configuration, which is why the real
+message above analyzed successfully **without** restarting Claude Code. A restart is only
+needed after changing hook wiring or the statusLine itself (that is what `install`
+rewrites). If the user wants a different model, the next action is
+`refluent settings set model <id>` and a restart is still not needed for the hook to pick
+it up.
 
 ## Verification
 
