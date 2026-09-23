@@ -1,6 +1,7 @@
 import type { DatabaseType } from './db.js';
 import { getLastAnalysisResult, getSetting, quietModeOn } from './settings.js';
 import { issueClassLabel, isIssueClass } from './issue-classes.js';
+import { DEFAULT_AGENT, type AgentId } from './agents.js';
 
 export interface Suggestion {
   instanceId: number;
@@ -152,15 +153,49 @@ export function statuslineBudget(terminalColumns: number): number {
 }
 
 /**
+ * Pi renders every keyed status — its own and other extensions' — in one shared footer
+ * row, and the hook cannot read the width of that slot: the terminal it measures is the
+ * whole pane, so a line fitted to the pane is still cut by Pi. Fit to a conservative
+ * width instead, so the reason survives. It is a ceiling: a narrower pane still wins, and
+ * `REFLUENT_TERMINAL_COLUMNS` can force it narrower but cannot widen it past this.
+ */
+export const PI_STATUSLINE_BUDGET = 100;
+
+/** The column budget for one agent: the fitted pane, capped where the pane is shared. */
+export function statuslineBudgetFor(agent: AgentId, terminalColumns: number | null): number | null {
+  const fitted = terminalColumns === null ? null : statuslineBudget(terminalColumns);
+  if (agent !== 'pi') return fitted;
+  return fitted === null ? PI_STATUSLINE_BUDGET : Math.min(fitted, PI_STATUSLINE_BUDGET);
+}
+
+/**
+ * Whether the user's own sentence earns its columns. `auto` (the default) keeps it where
+ * refluent owns the line and drops it on Pi, whose footer row is shared with other
+ * statuses; `on`/`off` force it everywhere. The original is the user's own message, so it
+ * is already visible in the transcript above the line — the first thing to spend on the
+ * rewrite and the reason, which are what the suggestion exists to convey.
+ */
+export function showOriginalFor(db: DatabaseType, agent: AgentId): boolean {
+  const pref = getSetting(db, 'statusline-original') ?? 'auto';
+  if (pref === 'on') return true;
+  if (pref === 'off') return false;
+  return agent !== 'pi';
+}
+
+/**
  * Richness ladder. Each step gives up the least valuable thing that is still on
  * the line: the issue-class label is redundant with the reason, and the user's
  * own sentence is already in the transcript, while the rewrite and the reason
  * are what the suggestion exists to convey. The first step that fits the pane
  * wins, so a narrow terminal loses the original instead of losing the reason.
+ *
+ * `showOriginal: false` skips the two steps that carry the sentence outright, for a
+ * surface where the pane is shared (see `showOriginalFor`).
  */
 function renderSuggestion(
   suggestion: Suggestion,
   maxColumns: number | null,
+  showOriginal: boolean,
 ): string {
   const original = truncate(suggestion.original, MAX_ORIGINAL_CHARS);
   const rewrite = truncate(suggestion.rewrite, MAX_REWRITE_CHARS);
@@ -169,12 +204,16 @@ function renderSuggestion(
   const why = reason.length > 0 ? `${label}: ${reason}` : label;
   const withReason = reason.length > 0 ? reason : label;
 
-  const ladder = [
-    `${PREFIX}${original} → ${rewrite} (${why})`,
-    `${PREFIX}${original} → ${rewrite} (${withReason})`,
-    `${PREFIX}${rewrite} (${why})`,
-    `${PREFIX}${rewrite} (${withReason})`,
-  ];
+  const paired = `${PREFIX}${rewrite} (${why})`;
+  const pairedPlain = `${PREFIX}${rewrite} (${withReason})`;
+  const ladder = showOriginal
+    ? [
+        `${PREFIX}${original} → ${rewrite} (${why})`,
+        `${PREFIX}${original} → ${rewrite} (${withReason})`,
+        paired,
+        pairedPlain,
+      ]
+    : [paired, pairedPlain];
   if (maxColumns === null) return ladder[0]!;
   for (const candidate of ladder) {
     if (displayWidth(candidate) <= maxColumns) return candidate;
@@ -196,12 +235,13 @@ function renderSuggestion(
  * Respects quiet mode and the statusLine switch; no color, no control sequences.
  *
  * `maxColumns` is the usable width when it could be discovered (see
- * `detectTerminalWidth`); null keeps the bounded-but-unfitted form.
+ * `detectTerminalWidth`); null keeps the bounded-but-unfitted form. `agent` decides
+ * whether the user's own sentence is shown (see `showOriginalFor`).
  */
 export function renderStatusline(
   db: DatabaseType,
   now: Date = new Date(),
-  options: { maxColumns?: number | null } = {},
+  options: { maxColumns?: number | null; agent?: AgentId } = {},
 ): string {
   if (quietModeOn(db)) return '';
   if ((getSetting(db, 'statusline-suggestion') ?? 'on') !== 'on') return '';
@@ -214,5 +254,5 @@ export function renderStatusline(
     }
     return '';
   }
-  return renderSuggestion(suggestion, options.maxColumns ?? null);
+  return renderSuggestion(suggestion, options.maxColumns ?? null, showOriginalFor(db, options.agent ?? DEFAULT_AGENT));
 }

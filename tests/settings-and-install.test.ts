@@ -72,6 +72,17 @@ describe('settings: enablement reflects the real hook state', () => {
     expect(result.ok).toBe(false);
     expect(getSetting(db, 'quiet-mode')).toBe('off');
   });
+
+  it('accepts auto/on/off for statusline-original and nothing else', () => {
+    expect(setPreference(db, 'statusline-original', 'on').ok).toBe(true);
+    expect(setPreference(db, 'statusline-original', 'off').ok).toBe(true);
+    expect(setPreference(db, 'statusline-original', 'auto').ok).toBe(true);
+    expect(getSetting(db, 'statusline-original')).toBe('auto');
+
+    const rejected = setPreference(db, 'statusline-original', 'yes');
+    expect(rejected.ok).toBe(false);
+    expect(getSetting(db, 'statusline-original')).toBe('auto');
+  });
 });
 
 describe('settings: settings report shows real hook and endpoint liveness', () => {

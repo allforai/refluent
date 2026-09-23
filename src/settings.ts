@@ -6,6 +6,7 @@ export type SettingKey = string;
 export const PREFERENCE_KEYS = [
   'capture-enabled',
   'statusline-suggestion',
+  'statusline-original',
   'session-start-review',
   'quiet-mode',
   'reminder-channel',
@@ -16,6 +17,7 @@ export type PreferenceKey = (typeof PREFERENCE_KEYS)[number];
 export const PREFERENCE_DEFAULTS: Readonly<Record<PreferenceKey, string>> = {
   'capture-enabled': SETTING_DEFAULTS['capture-enabled'],
   'statusline-suggestion': SETTING_DEFAULTS['statusline-suggestion'],
+  'statusline-original': SETTING_DEFAULTS['statusline-original'],
   'session-start-review': SETTING_DEFAULTS['session-start-review'],
   'quiet-mode': SETTING_DEFAULTS['quiet-mode'],
   'reminder-channel': SETTING_DEFAULTS['reminder-channel'],
@@ -24,6 +26,7 @@ export const PREFERENCE_DEFAULTS: Readonly<Record<PreferenceKey, string>> = {
 export const ALLOWED_VALUES: Readonly<Record<PreferenceKey, readonly string[]>> = {
   'capture-enabled': ['on', 'off'],
   'statusline-suggestion': ['on', 'off'],
+  'statusline-original': ['auto', 'on', 'off'],
   'session-start-review': ['on', 'off'],
   'quiet-mode': ['on', 'off'],
   'reminder-channel': ['terminal'],

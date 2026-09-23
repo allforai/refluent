@@ -125,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs(status);
 export const SETTING_DEFAULTS: Readonly<Record<string, string>> = {
   'capture-enabled': 'on',
   'statusline-suggestion': 'on',
+  'statusline-original': 'auto',
   'session-start-review': 'on',
   'quiet-mode': 'off',
   'reminder-channel': 'terminal',

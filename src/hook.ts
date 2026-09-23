@@ -7,7 +7,7 @@ import { captureMessage, runAnalysis } from './capture.js';
 import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
 import { renderDueNotice } from './review.js';
-import { renderStatusline, statuslineBudget } from './statusline.js';
+import { renderStatusline, statuslineBudgetFor } from './statusline.js';
 import { detectTerminalWidth } from './terminal-width.js';
 import { DEFAULT_AGENT, agentSource, normalizePromptPayload, type AgentId } from './agents.js';
 import { wrappedStatusLineCommand } from './install.js';
@@ -155,10 +155,13 @@ export async function handleStatusline(inputText: string, deps: HookDeps): Promi
   }
   try {
     // Claude Code truncates an over-wide status line instead of wrapping, so the
-    // line is fitted to the pane it will be rendered into.
+    // line is fitted to the pane it will be rendered into. Pi shares its footer row
+    // with other statuses, so its budget is capped (see statuslineBudgetFor).
+    const agent = deps.agent ?? DEFAULT_AGENT;
     const columns = deps.terminalColumns === undefined ? detectTerminalWidth() : deps.terminalColumns;
     const line = renderStatusline(deps.db, new Date(), {
-      maxColumns: columns === null || columns === undefined ? null : statuslineBudget(columns),
+      maxColumns: statuslineBudgetFor(agent, columns ?? null),
+      agent,
     });
     if (line) lines.push(line);
   } catch {

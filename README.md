@@ -142,7 +142,9 @@ Nothing to remember during a conversation:
 - **The status line** shows at most one suggestion:
   `refluent: <your sentence> → <better phrasing> (<why>)`. Your own wrapped status line is
   printed first and refluent's line is appended below it; a suggestion expires after
-  15 minutes.
+  15 minutes. On Pi your sentence is left out (its footer row is shared with other
+  extensions' statuses, so a long line is cut by Pi) — set `statusline-original on` to
+  force it back, or `off` to drop it everywhere.
 - **Session start** shows you one line: `refluent: N review item(s) ... are due. Run
   \`refluent review\` in a terminal.` It is sent as a JSON `systemMessage`, so it is
   visible to you and never injected into the agent's context. It does not call the model.
@@ -157,6 +159,7 @@ Switches:
 node bin/refluent settings                          # show switches + real enablement state
 node bin/refluent settings set quiet-mode on        # suppress every terminal output
 node bin/refluent settings set statusline-suggestion off
+node bin/refluent settings set statusline-original off    # drop your own sentence from the line
 node bin/refluent settings reset                    # switches only; model config is kept
 ```
 

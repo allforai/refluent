@@ -390,6 +390,23 @@ async function main() {
     statusline1.stdout,
   );
 
+  // The same suggestion through Pi: its footer row is shared, so the user's own
+  // sentence is dropped and the line stays inside the capped budget.
+  const piStatusline = await run(['hook', 'statusline', '--agent', 'pi'], { env });
+  record(
+    'pi-statusline-drops-the-original',
+    'node bin/refluent hook statusline --agent pi (same suggestion)',
+    piStatusline.code,
+    `claude-code="${statusline1.stdout.trim()}" pi="${piStatusline.stdout.trim()}"`,
+    statusline1.stdout.includes('→') &&
+    !piStatusline.stdout.includes('→') &&
+    piStatusline.stdout.includes('(') &&
+    displayWidth(piStatusline.stdout.trimEnd()) <= 100
+      ? 'passed'
+      : 'failed',
+    piStatusline.stdout,
+  );
+
   // Two more natural-language messages (a grammar error each) so the store has a
   // history to draw session-start questions from.
   const m2 = await sendMessage(M.grammar1, 'msg-2');

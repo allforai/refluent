@@ -180,6 +180,8 @@ better-sqlite3, WAL mode,
 - **schema_migrations**: `version` INTEGER PRIMARY KEY, `applied_at` TEXT NOT NULL.
 - **settings** (`data-settings`): `key` TEXT PRIMARY KEY, `value` TEXT NOT NULL,
   `updated_at` TEXT NOT NULL. Rows: `capture-enabled`, `statusline-suggestion`,
+  `statusline-original` (`auto|on|off`: `auto` drops the user's own sentence where the
+  status pane is shared, i.e. on Pi, and keeps it where refluent owns the line),
   `session-start-review`, `quiet-mode`, `reminder-channel`, plus install/liveness state
   `hook_installed`, `hook_seen_at` and `wrapped_statusline`.
 - **analysis_jobs** (`data-captured-message`, `data-analysis-job`): `id` INTEGER

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { memoryDb, seedPoint } from './helpers.js';
 import type { DatabaseType } from '../src/db.js';
 import { getSetting, setLastAnalysisResult, setSetting } from '../src/settings.js';
-import { renderStatusline, statuslineBudget, displayWidth, STATUSLINE_TTL_MS } from '../src/statusline.js';
+import { renderStatusline, statuslineBudget, statuslineBudgetFor, displayWidth, showOriginalFor, PI_STATUSLINE_BUDGET, STATUSLINE_TTL_MS } from '../src/statusline.js';
 import { handleStatusline } from '../src/hook.js';
 import { runInstall, runUninstall, WRAPPED_STATUSLINE_KEY } from '../src/install.js';
 
@@ -208,6 +208,62 @@ describe('statusline: the line is fitted to the pane that renders it', () => {
 
     const wide = await handleStatusline('{}', { db, terminalColumns: 137, runStatusCommand: () => '' });
     expect(wide.stdout.trimEnd()).toContain('why is it breking？ → Why is it broken?');
+  });
+});
+
+describe('statusline: the original yields where the pane is shared', () => {
+  function seedSuggestion(): void {
+    seedPoint(db, {
+      canonicalForm: 'progress',
+      issueClass: 'chinglish_collocation',
+      originalText: 'How is this project efforting?',
+      rewrite: 'How is this project progressing?',
+      reason: 'Improved collocation for clarity.',
+    });
+  }
+
+  it('keeps the sentence for Claude Code and drops it on Pi under the default (auto)', () => {
+    seedSuggestion();
+    const cc = renderStatusline(db, new Date(), { agent: 'claude-code', maxColumns: 200 });
+    expect(cc).toContain('How is this project efforting? → ');
+
+    const pi = renderStatusline(db, new Date(), { agent: 'pi', maxColumns: 200 });
+    expect(pi).not.toContain('→');
+    expect(pi).toBe(
+      'refluent: How is this project progressing? (Chinglish 搭配: Improved collocation for clarity.)',
+    );
+    expect(displayWidth(pi)).toBeLessThanOrEqual(PI_STATUSLINE_BUDGET);
+  });
+
+  it('lets the setting force the sentence on or off everywhere', () => {
+    seedSuggestion();
+    setSetting(db, 'statusline-original', 'on');
+    expect(renderStatusline(db, new Date(), { agent: 'pi', maxColumns: 200 })).toContain('→');
+
+    setSetting(db, 'statusline-original', 'off');
+    expect(renderStatusline(db, new Date(), { agent: 'claude-code', maxColumns: 200 })).not.toContain('→');
+  });
+
+  it('caps Pi at the shared-footer budget without narrowing a smaller pane', () => {
+    expect(statuslineBudgetFor('pi', 200)).toBe(PI_STATUSLINE_BUDGET);
+    expect(statuslineBudgetFor('pi', null)).toBe(PI_STATUSLINE_BUDGET);
+    expect(statuslineBudgetFor('pi', 67)).toBe(statuslineBudget(67));
+    expect(statuslineBudgetFor('claude-code', 200)).toBe(statuslineBudget(200));
+    expect(statuslineBudgetFor('claude-code', null)).toBeNull();
+  });
+
+  it('reports the policy the renderer applies', () => {
+    expect(showOriginalFor(db, 'claude-code')).toBe(true);
+    expect(showOriginalFor(db, 'pi')).toBe(false);
+    expect(showOriginalFor(db, 'codex')).toBe(true);
+  });
+
+  it('drops the original for Pi through the hook, even on a wide pane', async () => {
+    seedSuggestion();
+    const result = await handleStatusline('{}', { db, terminalColumns: 200, agent: 'pi' });
+    expect(result.stdout).not.toContain('→');
+    expect(result.stdout).toContain('(Chinglish 搭配: Improved collocation for clarity.)');
+    expect(displayWidth(result.stdout.trimEnd())).toBeLessThanOrEqual(PI_STATUSLINE_BUDGET);
   });
 });
 

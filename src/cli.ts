@@ -133,6 +133,7 @@ function printHelp(): void {
   out('  refluent settings set model-endpoint <url>   analysis base URL, stored locally');
   out('  refluent settings set model <id>             analysis model id, stored locally');
   out('  refluent settings set model-api-key-env <VAR> read the API key from this env var');
+  out('  refluent settings set statusline-original off  drop your own sentence from the status line');
   out('  refluent settings reset            restore defaults');
   out('  refluent review                    answer due production questions');
   out('  refluent hook <name> [--agent <id>] hook entrypoint (user-prompt-submit|session-start|statusline)');
@@ -279,6 +280,7 @@ async function settingsCommand(args: string[]): Promise<number> {
     }
     out('');
     out('Quiet mode overrides statusLine suggestions and the session-start notice.');
+    out('statusline-original=auto drops your own sentence on Pi (shared footer) and keeps it elsewhere.');
     out('Commands: refluent settings set <key> <value> | refluent settings reset');
   }
   db.close();
