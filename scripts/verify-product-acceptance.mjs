@@ -774,6 +774,54 @@ async function main() {
   );
   await slowServer.close();
 
+  // --- Codex and Pi capture through their own adapters -----------------------
+  // Both are driven here exactly as their platform does: a Codex-shaped hook payload
+  // (`hook_event_name` + `prompt`) and the Pi extension's own contract. The recorded
+  // origin must name the agent, and Codex's hooks file must resolve against CODEX_HOME.
+  const codexDir = mkTemp('codex');
+  const codexHome = path.join(codexDir, 'orca-account-home');
+  // The main fake endpoint is closed by this point in the run, so this check owns one.
+  const codexServer = await startFakeServer({ mode: 'normal' });
+  const codexEnv = {
+    ...env,
+    REFLUENT_DATA_DIR: dataDirFor(codexDir),
+    REFLUENT_MODEL_ENDPOINT: codexServer.endpoint,
+    CODEX_HOME: codexHome,
+    REFLUENT_CODEX_SETTINGS: '',
+  };
+  fs.mkdirSync(codexHome, { recursive: true });
+  fs.writeFileSync(
+    path.join(codexHome, 'hooks.json'),
+    `${JSON.stringify({ hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: '/opt/orca/codex-hook.sh' }] }] } }, null, 2)}\n`,
+    'utf8',
+  );
+  const codexInstall = await run(['install', '--agent', 'codex', '--yes'], { env: codexEnv });
+  const codexHooksFile = JSON.parse(fs.readFileSync(path.join(codexHome, 'hooks.json'), 'utf8'));
+  const codexHookJson = JSON.stringify(codexHooksFile);
+  const codexKeepsOrca = codexHookJson.includes('/opt/orca/codex-hook.sh');
+  const codexNoStatusline = !('statusLine' in codexHooksFile);
+  const codexPayload = JSON.stringify({
+    hook_event_name: 'UserPromptSubmit',
+    session_id: 'codex-session',
+    // A prompt the fake model answers with an improvement (see analysisResponse).
+    prompt: 'Can you help me look this bug',
+  });
+  await run(['hook', 'user-prompt-submit', '--agent', 'codex'], { env: codexEnv, input: codexPayload });
+  const codexDb = openDb(path.join(dataDirFor(codexDir), 'analysis-and-data.sqlite'));
+  const codexInstance = codexDb.prepare("SELECT source FROM instances WHERE source LIKE 'codex%' LIMIT 1").get();
+  codexDb.close();
+  await codexServer.close();
+  record(
+    'codex-capture-through-its-own-adapter',
+    'CODEX_HOME=<account home> node bin/refluent install --agent codex --yes, then hook user-prompt-submit --agent codex',
+    codexInstall.code,
+    `hooks written under CODEX_HOME=${fs.existsSync(path.join(codexHome, 'hooks.json'))}; kept the other agent's hook=${codexKeepsOrca}; wrote no statusLine=${codexNoStatusline}; recorded origin=${codexInstance?.source ?? 'none'}`,
+    codexInstall.code === 0 && codexKeepsOrca && codexNoStatusline && codexInstance?.source === 'codex:UserPromptSubmit'
+      ? 'passed'
+      : 'failed',
+    JSON.stringify(codexHooksFile),
+  );
+
   // --- Uninstall hands the user's own settings file back untouched -----------
   // Last step of the loop: after install wraps the hooks, uninstall must return the file
   // byte-for-byte to what the user had, including their own statusLine and unrelated keys.

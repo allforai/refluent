@@ -4,6 +4,8 @@ import { dataDir, nowIso } from './config.js';
 import type { DatabaseType } from './db.js';
 import { HttpAnalysisClient, analysisClientFor, type EndpointProbe } from './analysis/http.js';
 import { getSetting, setSetting } from './settings.js';
+import { DEFAULT_AGENT, agentDefinition, type AgentId } from './agents.js';
+import { PI_EXTENSION_FILENAME, piExtensionSource } from './pi-extension.js';
 import {
   MODEL_ENDPOINT_KEY,
   MODEL_KEY,
@@ -20,10 +22,12 @@ export interface HookStatus {
 
 export interface InstallOptions {
   consent: boolean;
+  /** Claude settings file, Codex hooks file, or the Pi extensions directory. */
   settingsPath: string;
   nodePath?: string;
   binPath: string;
   env?: NodeJS.ProcessEnv;
+  agent?: AgentId;
 }
 
 export interface InstallReport {
@@ -41,11 +45,13 @@ export interface InstallReport {
 export function hookCommands(
   nodePath: string,
   binPath: string,
+  agent: AgentId = DEFAULT_AGENT,
 ): { capture: string; sessionStart: string; statusline: string } {
+  const suffix = ` --agent ${agent}`;
   return {
-    capture: `${nodePath} ${binPath} hook user-prompt-submit`,
-    sessionStart: `${nodePath} ${binPath} hook session-start`,
-    statusline: `${nodePath} ${binPath} hook statusline`,
+    capture: `${nodePath} ${binPath} hook user-prompt-submit${suffix}`,
+    sessionStart: `${nodePath} ${binPath} hook session-start${suffix}`,
+    statusline: `${nodePath} ${binPath} hook statusline${suffix}`,
   };
 }
 
@@ -80,23 +86,33 @@ export interface HookConfigWrite {
 }
 
 /**
- * Merges the refluent hook registration into a Claude Code settings file.
- * Claude Code runs a single statusLine, so an existing non-refluent statusLine
- * is returned for the caller to keep and run from inside the refluent one. The
- * original file is copied once to `<settings>.refluent-backup`.
+ * Merges the refluent hook registration into an agent's hook file. The shape is
+ * the same for Claude Code (`~/.claude/settings.json`) and Codex
+ * (`~/.codex/hooks.json`): `{hooks: {Event: [{hooks: [{type, command}]}]}}`, with
+ * the same event names. Only Claude Code gets a statusLine, because only Claude
+ * Code has a command-driven status line to own; Codex's is a built-in toggle.
+ * The original file is copied once to `<settings>.refluent-backup`.
  */
-export function writeHookConfig(settingsPath: string, nodePath: string, binPath: string): HookConfigWrite {
+export function writeAgentHookConfig(
+  settingsPath: string,
+  nodePath: string,
+  binPath: string,
+  agent: AgentId = DEFAULT_AGENT,
+): HookConfigWrite {
   const settings = readSettingsFile(settingsPath);
-  const commands = hookCommands(nodePath, binPath);
+  const commands = hookCommands(nodePath, binPath, agent);
   const backupPath = `${settingsPath}.refluent-backup`;
   if (fs.existsSync(settingsPath) && !fs.existsSync(backupPath)) {
     fs.copyFileSync(settingsPath, backupPath);
   }
-  const existing = settings.statusLine;
-  const previousStatusLine =
-    existing && typeof existing === 'object' && !isRefluentEntry(existing)
-      ? (existing as Record<string, unknown>)
-      : null;
+  let previousStatusLine: Record<string, unknown> | null = null;
+  if (agentDefinition(agent).hasInjectableStatusline) {
+    const existing = settings.statusLine;
+    previousStatusLine =
+      existing && typeof existing === 'object' && !isRefluentEntry(existing)
+        ? (existing as Record<string, unknown>)
+        : null;
+  }
 
   const hooks = (settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {}) as Record<
     string,
@@ -111,15 +127,26 @@ export function writeHookConfig(settingsPath: string, nodePath: string, binPath:
     { hooks: [{ type: 'command', command: commands.sessionStart }] },
   ];
   settings.hooks = hooks;
-  settings.statusLine = { type: 'command', command: commands.statusline };
+  if (agentDefinition(agent).hasInjectableStatusline) {
+    settings.statusLine = { type: 'command', command: commands.statusline };
+  }
 
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
   return { previousStatusLine };
 }
 
+/** Claude Code keeps its own name for the same write, for existing callers and tests. */
+export function writeHookConfig(settingsPath: string, nodePath: string, binPath: string): HookConfigWrite {
+  return writeAgentHookConfig(settingsPath, nodePath, binPath, 'claude-code');
+}
+
 /** Removes every refluent entry and puts back the user's own statusLine, if one was wrapped. */
-export function removeHookConfig(settingsPath: string, restoreStatusLine: Record<string, unknown> | null): void {
+export function removeAgentHookConfig(
+  settingsPath: string,
+  restoreStatusLine: Record<string, unknown> | null,
+  agent: AgentId = DEFAULT_AGENT,
+): void {
   if (!fs.existsSync(settingsPath)) return;
   const settings = readSettingsFile(settingsPath);
   const hooks = (settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {}) as Record<string, unknown>;
@@ -133,11 +160,16 @@ export function removeHookConfig(settingsPath: string, restoreStatusLine: Record
   // user already had are preserved above and keep the key alive.
   if (Object.keys(hooks).length > 0) settings.hooks = hooks;
   else delete settings.hooks;
-  if (isRefluentEntry(settings.statusLine)) {
+  if (agentDefinition(agent).hasInjectableStatusline && isRefluentEntry(settings.statusLine)) {
     if (restoreStatusLine) settings.statusLine = restoreStatusLine;
     else delete settings.statusLine;
   }
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+}
+
+/** Claude Code keeps its own name for the same removal, for existing callers and tests. */
+export function removeHookConfig(settingsPath: string, restoreStatusLine: Record<string, unknown> | null): void {
+  removeAgentHookConfig(settingsPath, restoreStatusLine, 'claude-code');
 }
 
 export const WRAPPED_STATUSLINE_KEY = 'wrapped_statusline';
@@ -154,7 +186,7 @@ export function wrappedStatusLineCommand(db: DatabaseType): string | null {
   }
 }
 
-export function runUninstall(db: DatabaseType, settingsPath: string): string[] {
+export function runUninstall(db: DatabaseType, settingsPath: string, agent: AgentId = DEFAULT_AGENT): string[] {
   const raw = getSetting(db, WRAPPED_STATUSLINE_KEY) ?? '';
   let restore: Record<string, unknown> | null = null;
   try {
@@ -162,35 +194,74 @@ export function runUninstall(db: DatabaseType, settingsPath: string): string[] {
   } catch {
     restore = null;
   }
-  removeHookConfig(settingsPath, restore);
+  if (agentDefinition(agent).capture === 'extension') {
+    const removed = removePiExtension(settingsPath);
+    setSetting(db, 'hook_installed', 'false');
+    setSetting(db, 'hook_seen_at', '');
+    return [
+      removed ? `Removed the refluent Pi extension from: ${settingsPath}` : `No refluent Pi extension at: ${settingsPath}`,
+      'Restart Pi so the extension is unloaded.',
+      'Your knowledge points are kept; delete the data directory to remove them.',
+    ];
+  }
+  removeAgentHookConfig(settingsPath, restore, agent);
   setSetting(db, 'hook_installed', 'false');
   setSetting(db, 'hook_seen_at', '');
   setSetting(db, WRAPPED_STATUSLINE_KEY, '');
   return [
     `Removed the refluent hooks from: ${settingsPath}`,
-    restore ? 'Restored your previous statusLine.' : 'Removed the refluent statusLine.',
+    agentDefinition(agent).hasInjectableStatusline
+      ? restore
+        ? 'Restored your previous statusLine.'
+        : 'Removed the refluent statusLine.'
+      : 'Left the status line alone: this agent has no injectable status line.',
     'Your knowledge points are kept; delete the data directory to remove them.',
   ];
 }
 
-/**
- * Whether the settings file still contains our hook registration. This proves
- * the hook is *registered*, not that Claude Code runs it: that is recorded by
- * the hook itself (see `markHookSeen`).
- */
-export function verifyHookConfig(settingsPath: string): boolean {
+export function verifyAgentHookConfig(settingsPath: string, agent: AgentId = DEFAULT_AGENT): boolean {
   try {
     const settings = readSettingsFile(settingsPath);
     const json = JSON.stringify(settings);
+    const needsStatusline = agentDefinition(agent).hasInjectableStatusline;
     return (
       json.includes('refluent') &&
       json.includes('UserPromptSubmit') &&
       json.includes('SessionStart') &&
-      json.includes('statusline')
+      (!needsStatusline || json.includes('statusline'))
     );
   } catch {
     return false;
   }
+}
+
+/** Claude Code keeps its own name for the same check, for existing callers and tests. */
+export function verifyHookConfig(settingsPath: string): boolean {
+  return verifyAgentHookConfig(settingsPath, 'claude-code');
+}
+
+/** The Pi extension refluent owns; Pi loads it from its personal extensions directory. */
+export function writePiExtension(extensionsDir: string, nodePath: string, binPath: string): string {
+  fs.mkdirSync(extensionsDir, { recursive: true });
+  const target = path.join(extensionsDir, PI_EXTENSION_FILENAME);
+  fs.writeFileSync(target, piExtensionSource({ nodePath, binPath }), 'utf8');
+  return target;
+}
+
+export function verifyPiExtension(extensionsDir: string): boolean {
+  try {
+    const target = path.join(extensionsDir, PI_EXTENSION_FILENAME);
+    return fs.readFileSync(target, 'utf8').includes('install --agent pi');
+  } catch {
+    return false;
+  }
+}
+
+export function removePiExtension(extensionsDir: string): boolean {
+  const target = path.join(extensionsDir, PI_EXTENSION_FILENAME);
+  if (!fs.existsSync(target)) return false;
+  fs.unlinkSync(target);
+  return true;
 }
 
 function dataDirWritable(): boolean {
@@ -312,18 +383,43 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
     };
   }
 
+  const agent = options.agent ?? DEFAULT_AGENT;
+  const definition = agentDefinition(agent);
   const nodePath = options.nodePath ?? process.execPath;
-  const { previousStatusLine } = writeHookConfig(options.settingsPath, nodePath, options.binPath);
-  if (previousStatusLine) {
-    setSetting(db, WRAPPED_STATUSLINE_KEY, JSON.stringify(previousStatusLine));
-    messages.push('Your existing statusLine is kept: refluent runs it and adds its own line below.');
+
+  let registered: boolean;
+  if (definition.capture === 'extension') {
+    const written = writePiExtension(options.settingsPath, nodePath, options.binPath);
+    registered = verifyPiExtension(options.settingsPath);
+    messages.push(`Wrote the Pi extension to: ${written}`);
+    messages.push('Restart Pi so it loads the extension; it captures your outgoing prompts and shows the suggestion in Pi\'s status bar.');
+  } else {
+    const { previousStatusLine } = writeAgentHookConfig(options.settingsPath, nodePath, options.binPath, agent);
+    if (previousStatusLine) {
+      setSetting(db, WRAPPED_STATUSLINE_KEY, JSON.stringify(previousStatusLine));
+      messages.push('Your existing statusLine is kept: refluent runs it and adds its own line below.');
+    }
+    registered = verifyAgentHookConfig(options.settingsPath, agent);
+    messages.push(
+      definition.hasInjectableStatusline
+        ? `Wrote the UserPromptSubmit and SessionStart hooks and the statusLine to: ${options.settingsPath}`
+        : `Wrote the UserPromptSubmit and SessionStart hooks to: ${options.settingsPath}`,
+    );
+    if (!definition.hasInjectableStatusline) {
+      messages.push(
+        `${definition.label} has no status line refluent can render into, so suggestions are captured now and read later with \`refluent review\`.`,
+      );
+    }
+    if (agent === 'codex') {
+      messages.push(
+        'Codex runs only hooks it has trusted: the first time it sees this one it asks you to approve it, and `codex exec` needs that approval too (or --dangerously-bypass-hook-trust in automation).',
+      );
+    }
   }
-  const registered = verifyHookConfig(options.settingsPath);
   setSetting(db, 'hook_installed', registered ? 'true' : 'false');
   const loaded = (getSetting(db, 'hook_seen_at') ?? '') !== '';
-  messages.push(`Wrote the UserPromptSubmit and SessionStart hooks and the statusLine to: ${options.settingsPath}`);
   if (!loaded) {
-    messages.push('Claude Code has not run the hook yet: send any message there, then run `refluent settings` to confirm.');
+    messages.push(`${definition.label} has not run the hook yet: send any message there, then run \`refluent settings\` to confirm.`);
   }
   messages.push('Only your outgoing messages are captured; agent replies, code and logs are never captured.');
 

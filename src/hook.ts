@@ -9,6 +9,7 @@ import type { AnalysisClient } from './analysis/types.js';
 import { renderDueNotice } from './review.js';
 import { renderStatusline, statuslineBudget } from './statusline.js';
 import { detectTerminalWidth } from './terminal-width.js';
+import { DEFAULT_AGENT, agentSource, normalizePromptPayload, type AgentId } from './agents.js';
 import { wrappedStatusLineCommand } from './install.js';
 
 export type HookName = 'user-prompt-submit' | 'session-start' | 'statusline';
@@ -31,6 +32,8 @@ export interface HookDeps {
   runStatusCommand?: (command: string, input: string) => string;
   /** Injected for tests; null means "no terminal width known". */
   terminalColumns?: number | null;
+  /** Which agent is capturing; decides the recorded origin of a knowledge point. */
+  agent?: AgentId;
 }
 
 function runStatusCommand(command: string, input: string): string {
@@ -86,23 +89,24 @@ export async function handleUserPromptSubmit(
   try {
     markHookSeen(deps.db);
     const payload = parseJson(inputText);
-    const prompt = payload.prompt;
-    if (typeof prompt !== 'string') return { stdout: '', exitCode: 0 };
+    const normalized = normalizePromptPayload(payload);
+    if (!normalized) return { stdout: '', exitCode: 0 };
     if (!effectiveCaptureEnabled(deps.db).enabled) return { stdout: '', exitCode: 0 };
+    const source = agentSource(deps.agent ?? DEFAULT_AGENT);
 
     const outcome = captureMessage(deps.db, {
-      rawText: prompt,
-      messageId: typeof payload.message_id === 'string' ? payload.message_id : null,
-      sessionId: typeof payload.session_id === 'string' ? payload.session_id : null,
+      rawText: normalized.prompt,
+      messageId: normalized.messageId,
+      sessionId: normalized.sessionId,
     });
 
     if (outcome.queued) {
       if (deps.inlineAnalysis) {
-        await runAnalysis(deps.db, analysisClient(deps), outcome.jobId);
+        await runAnalysis(deps.db, analysisClient(deps), outcome.jobId, source);
       } else if (deps.spawnDetached) {
         deps.spawnDetached(outcome.jobId);
       } else {
-        spawnAnalysisJob(outcome.jobId);
+        spawnAnalysisJob(outcome.jobId, deps.agent ?? DEFAULT_AGENT);
       }
     }
     return { stdout: '', exitCode: 0, captured: true, queued: outcome.queued, jobId: outcome.jobId };
@@ -163,10 +167,10 @@ export async function handleStatusline(inputText: string, deps: HookDeps): Promi
   return { stdout: lines.length > 0 ? `${lines.join('\n')}\n` : '', exitCode: 0 };
 }
 
-export function spawnAnalysisJob(jobId: number): void {
+export function spawnAnalysisJob(jobId: number, agent: AgentId = DEFAULT_AGENT): void {
   try {
     const bin = fileURLToPath(new URL('../bin/refluent', import.meta.url));
-    const child = spawn(process.execPath, [bin, 'analyze-job', String(jobId)], {
+    const child = spawn(process.execPath, [bin, 'analyze-job', String(jobId), '--agent', agent], {
       detached: true,
       stdio: 'ignore',
       env: process.env,
@@ -177,11 +181,11 @@ export function spawnAnalysisJob(jobId: number): void {
   }
 }
 
-export async function runHook(name: HookName): Promise<number> {
+export async function runHook(name: HookName, agent: AgentId = DEFAULT_AGENT): Promise<number> {
   const inputText = await readStream(process.stdin).catch(() => '');
   const db = openDatabase();
   const inline = process.env.REFLUENT_INLINE_ANALYSIS === '1';
-  const deps: HookDeps = { db, inlineAnalysis: inline };
+  const deps: HookDeps = { db, inlineAnalysis: inline, agent };
   const result =
     name === 'user-prompt-submit'
       ? await handleUserPromptSubmit(inputText, deps)

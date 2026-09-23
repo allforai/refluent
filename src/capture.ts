@@ -91,6 +91,7 @@ export async function runAnalysis(
   db: DatabaseType,
   client: AnalysisClient,
   jobId: number,
+  source: WriteSource = 'claude-code:UserPromptSubmit',
 ): Promise<AnalysisOutcome> {
   const job = db
     .prepare(
@@ -128,7 +129,7 @@ export async function runAnalysis(
   const outcome = writePath(
     db,
     result,
-    'claude-code:UserPromptSubmit',
+    source,
     {
       analysisJobId: job.id,
       // Only the filtered text is kept on an instance: it is what the status

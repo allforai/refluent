@@ -2,7 +2,12 @@ import { nowIso } from './config.js';
 import type { DatabaseType } from './db.js';
 import type { AnalysisResult, KnowledgePointKind } from './issue-classes.js';
 
-export type WriteSource = 'claude-code:UserPromptSubmit' | 'refluent:review' | 'refluent:manual';
+export type WriteSource =
+  | 'claude-code:UserPromptSubmit'
+  | 'codex:UserPromptSubmit'
+  | 'pi:before-agent-start'
+  | 'refluent:review'
+  | 'refluent:manual';
 export type LinkRole = 'origin' | 'recurrence' | 'review';
 
 export interface WriteJob {

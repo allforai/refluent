@@ -1,6 +1,6 @@
 import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { claudeSettingsPath, dataDir, dbPath } from './config.js';
+import { claudeSettingsPath, codexHooksPath, dataDir, dbPath, piExtensionsDir } from './config.js';
 import { openDatabase, type DatabaseType } from './db.js';
 import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
@@ -31,6 +31,25 @@ import {
 } from './model-config.js';
 import { runReviewSession, type ReviewIO } from './review.js';
 import { runHook, type HookName } from './hook.js';
+import { DEFAULT_AGENT, agentDefinition, agentSource, parseAgentId, type AgentId } from './agents.js';
+import { removePiExtension } from './install.js';
+
+/** `--agent <id>` is accepted by every command that acts on one agent. */
+function readAgentArg(args: string[]): { agent: AgentId; rest: string[] } {
+  const index = args.findIndex((arg) => arg === '--agent');
+  if (index === -1) return { agent: DEFAULT_AGENT, rest: args };
+  const parsed = parseAgentId(args[index + 1]);
+  if (parsed === null) return { agent: DEFAULT_AGENT, rest: args };
+  const rest = [...args.slice(0, index), ...args.slice(index + 2)];
+  return { agent: parsed, rest };
+}
+
+/** Where an agent's capture is registered: a hooks file, or Pi's extensions directory. */
+export function agentTargetPath(agent: AgentId): string {
+  if (agent === 'codex') return codexHooksPath();
+  if (agent === 'pi') return piExtensionsDir();
+  return claudeSettingsPath();
+}
 
 export const CLI_VERSION = '0.1.0';
 
@@ -75,8 +94,14 @@ export async function main(argv: string[]): Promise<number> {
     case 'init':
       return installCommand(rest);
     case 'uninstall': {
+      const { agent } = readAgentArg(rest);
       const db = openDatabase();
-      for (const line of runUninstall(db, claudeSettingsPath())) out(`  ${line}`);
+      const target = agentTargetPath(agent);
+      const lines =
+        agentDefinition(agent).capture === 'extension'
+          ? runUninstall(db, target, agent)
+          : runUninstall(db, target, agent);
+      for (const line of lines) out(`  ${line}`);
       db.close();
       return 0;
     }
@@ -101,7 +126,8 @@ function printHelp(): void {
   out('');
   out('Commands:');
   out('  refluent install [--yes|--no]      authorize hooks and check the analysis endpoint');
-  out('  refluent uninstall                  remove the hooks and restore your own statusLine');
+  out('  refluent install --agent <id>       target claude-code (default), codex or pi');
+  out('  refluent uninstall [--agent <id>]   remove the hooks (or the Pi extension)');
   out('  refluent settings [show]           show switches and real enablement state');
   out('  refluent settings set <key> <val>  change a switch');
   out('  refluent settings set model-endpoint <url>   analysis base URL, stored locally');
@@ -109,24 +135,28 @@ function printHelp(): void {
   out('  refluent settings set model-api-key-env <VAR> read the API key from this env var');
   out('  refluent settings reset            restore defaults');
   out('  refluent review                    answer due production questions');
-  out('  refluent hook <name>               hook entrypoint (user-prompt-submit|session-start|statusline)');
-  out('  refluent analyze-job <id>          run one queued analysis job');
+  out('  refluent hook <name> [--agent <id>] hook entrypoint (user-prompt-submit|session-start|statusline)');
+  out('  refluent analyze-job <id> [--agent <id>] run one queued analysis job');
   out('');
   out(`Local data: ${dbPath()}`);
   out(`Claude Code settings: ${claudeSettingsPath()}`);
 }
 
 async function installCommand(args: string[]): Promise<number> {
+  const { agent, rest } = readAgentArg(args);
+  const definition = agentDefinition(agent);
   const db = openDatabase();
-  const settingsPath = claudeSettingsPath();
-  const assumeYes = args.includes('--yes') || args.includes('-y');
-  const assumeNo = args.includes('--no');
+  const settingsPath = agentTargetPath(agent);
+  const assumeYes = rest.includes('--yes') || rest.includes('-y');
+  const assumeNo = rest.includes('--no');
   const interactive = process.stdin.isTTY === true;
+  const targetLabel = definition.capture === 'extension' ? 'extension' : 'hook location';
 
   out('refluent install');
+  out(`  agent          : ${definition.label} (${agent})`);
   out(`  data directory : ${dataDir()}`);
-  out(`  hook location  : ${settingsPath}`);
-  out('  scope          : your outgoing Claude Code messages only — never agent replies, code or logs.');
+  out(`  ${targetLabel}  : ${settingsPath}`);
+  out(`  scope          : your outgoing ${definition.label} messages only — never agent replies, code or logs.`);
   out('  effect         : the message sent to the agent is never changed or delayed.');
   out('  analysis model : configured via REFLUENT_MODEL_ENDPOINT / REFLUENT_MODEL_API_KEY / REFLUENT_MODEL.');
 
@@ -134,12 +164,14 @@ async function installCommand(args: string[]): Promise<number> {
   if (!assumeYes && !assumeNo) {
     if (!interactive) {
       out('');
-      out('Non-interactive shell: re-run with --yes to authorize hook installation, or --no to decline.');
+      out('Non-interactive shell: re-run with --yes to authorize installation, or --no to decline.');
       db.close();
       return 0;
     }
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const answer = (await rl.question('Install the refluent hooks? [y/N] ')).trim().toLowerCase();
+    const answer = (await rl.question(`Install the refluent ${definition.capture === 'extension' ? 'extension' : 'hooks'}? [y/N] `))
+      .trim()
+      .toLowerCase();
     await rl.close();
     consent = answer === 'y' || answer === 'yes';
   }
@@ -148,6 +180,7 @@ async function installCommand(args: string[]): Promise<number> {
     consent,
     settingsPath,
     binPath: resolveBinPath(),
+    agent,
   });
   out('');
   for (const message of report.messages) out(`  ${message}`);
@@ -156,7 +189,11 @@ async function installCommand(args: string[]): Promise<number> {
   out(`  endpoint status: ${report.endpoint.status}`);
   out(`  capture        : ${report.captureEnabled ? 'enabled' : 'not enabled'}`);
   if (report.installed && report.endpoint.status === 'ready') {
-    out('  next           : send your next message in Claude Code to see the first suggestion.');
+    out(
+      definition.hasInjectableStatusline
+        ? `  next           : send your next message in ${definition.label} to see the first suggestion.`
+        : `  next           : your ${definition.label} messages are captured; read the suggestions with \`refluent review\`.`,
+    );
   }
   db.close();
   return report.installed || !consent ? 0 : 1;
@@ -324,22 +361,24 @@ async function reviewCommand(): Promise<number> {
 }
 
 async function hookCommand(args: string[]): Promise<number> {
-  const name = args[0];
+  const { agent, rest } = readAgentArg(args);
+  const name = rest[0];
   if (name !== 'user-prompt-submit' && name !== 'session-start' && name !== 'statusline') {
-    fail('usage: refluent hook <user-prompt-submit|session-start|statusline>');
+    fail('usage: refluent hook <user-prompt-submit|session-start|statusline> [--agent <id>]');
     return 1;
   }
-  return runHook(name as HookName);
+  return runHook(name as HookName, agent);
 }
 
 async function analyzeJobCommand(args: string[]): Promise<number> {
-  const id = Number(args[0]);
+  const { agent, rest } = readAgentArg(args);
+  const id = Number(rest[0]);
   if (!Number.isInteger(id) || id <= 0) {
-    fail('usage: refluent analyze-job <id>');
+    fail('usage: refluent analyze-job <id> [--agent <id>]');
     return 1;
   }
   const db = openDatabase();
-  const outcome = await runAnalysis(db, liveClient(db), id);
+  const outcome = await runAnalysis(db, liveClient(db), id, agentSource(agent));
   db.close();
   return outcome.status === 'failed' ? 0 : 0; // analysis failure is never surfaced to the conversation
 }

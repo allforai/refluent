@@ -27,6 +27,30 @@ export function claudeSettingsPath(): string {
     : path.join(os.homedir(), '.claude', 'settings.json');
 }
 
+/**
+ * Codex user-level hooks file. Same `{hooks: {Event: [{hooks: [...]}]}}` shape as Claude Code.
+ *
+ * It is resolved against `CODEX_HOME`, not the literal `~/.codex`: a manager like Orca
+ * runs Codex with a per-account home, and a hook written to `~/.codex/hooks.json` is never
+ * read. `~/.codex` is only the fallback when `CODEX_HOME` is unset.
+ */
+export function codexHooksPath(): string {
+  const override = process.env.REFLUENT_CODEX_SETTINGS?.trim();
+  if (override && override.length > 0) return override;
+  const home = process.env.CODEX_HOME?.trim();
+  return home && home.length > 0
+    ? path.join(home, 'hooks.json')
+    : path.join(os.homedir(), '.codex', 'hooks.json');
+}
+
+/** Directory Pi loads personal extensions from. */
+export function piExtensionsDir(): string {
+  const override = process.env.REFLUENT_PI_EXTENSIONS?.trim();
+  return override && override.length > 0
+    ? override
+    : path.join(os.homedir(), '.pi', 'agent', 'extensions');
+}
+
 export function nowIso(at: Date = new Date()): string {
   return at.toISOString();
 }

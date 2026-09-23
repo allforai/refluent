@@ -102,6 +102,37 @@ Failure reasons are sanitized (`not_configured`, `auth_rejected`, `rate_limited`
 `timeout`, `network_error`, `empty_response`, `invalid_response`, `http_error_<status>`)
 and never include response bodies or your text.
 
+## Agents
+
+Capture and display are separate, because the platforms differ. `--agent` selects the
+target; the default is Claude Code, and `uninstall` takes the same flag.
+
+```sh
+node bin/refluent install --agent claude-code   # default
+node bin/refluent install --agent codex
+node bin/refluent install --agent pi
+```
+
+| | Claude Code | Codex | Pi |
+|---|---|---|---|
+| capture | `UserPromptSubmit` hook | `UserPromptSubmit` hook | `before_agent_start` extension |
+| where | `~/.claude/settings.json` | `$CODEX_HOME/hooks.json` | `~/.pi/agent/extensions/refluent.ts` |
+| suggestion shown in | the wrapped status line | — (read it with `refluent review`) | Pi's status bar, its own key |
+
+- **Codex** resolves its hooks file against `CODEX_HOME`, not the literal `~/.codex`: a
+  manager such as Orca runs Codex with a per-account home, and a hook written to
+  `~/.codex/hooks.json` is never read. Existing hooks (for example Orca's own) are kept and
+  the file is backed up. Codex runs only hooks it has **trusted**, so it asks you to approve
+  this one the first time it sees it; `codex exec` needs that approval too (or
+  `--dangerously-bypass-hook-trust` in automation). Codex's status line is a built-in
+  toggle, so nothing can be injected into it.
+- **Pi** has no hook file, so `install --agent pi` writes a small extension. Pi's status bar
+  is keyed (`ctx.ui.setStatus("refluent", …)`), so refluent's line coexists with other
+  extensions' lines instead of competing for one slot. Restart Pi to load it.
+- Every adapter maps its own payload onto one contract (`prompt` plus optional
+  `session_id`/`message_id`), and each knowledge point records where it came from
+  (`claude-code:UserPromptSubmit`, `codex:UserPromptSubmit`, `pi:before-agent-start`).
+
 ## Use
 
 Nothing to remember during a conversation:
