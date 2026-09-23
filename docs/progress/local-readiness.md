@@ -1,179 +1,187 @@
 # Local readiness report — refluent
 
 Date: 2026-09-23
-Verified implementation commit: `9da1a290feb8451e02cb92ac2f033348079b662d`
-(`git log` is the authority for the commit that adds this report.)
+**Verified commit for this round: `2c8cf60`** (`git log` is the authority for the commit
+that adds this report.)
 
-Scope: bring the already-reviewed delivery to a reproducible, verified, locally
-committed state within the confirmed product requirements. No new product features, no
-push, no deletion of existing work, no change to the user's real Claude Code
-configuration or data.
+Scope: bring the already-reviewed delivery to a reproducible, verified, locally committed
+state within the confirmed product requirements. No new product features, no push, nothing
+deleted, and the user's real Claude Code configuration and data were never touched.
 
-## 1. Where the delivery actually stands
+---
 
-| Item | State | Evidence |
+## 1. What this round verified — against the current code
+
+Everything in this section was produced by this round, on the tree at `2c8cf60`
+(or its immediate parent, noted per item).
+
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Workflow nodes | 19/19 `completed` | `.allforai/bootstrap/workflow.json` `transition_log` (36 entries) |
-| Closure node | `close-design-fixes` published, `status: passed`, 9/9 intents with named evidence | `.allforai/bootstrap/close-design-fixes.json` |
-| Runtime experience gate | `review-experience-runtime-fixes` attempt 4 `passed`; `must_fix_before_release=[]`, `quality_gaps=[]` | `.allforai/bootstrap/review-experience-runtime-fixes.json` |
-| Product concept | direction + `learning-loop` both at revision 2, consistent ("session start = due-count notice only"); baseline v4 | `.allforai/product-concept/` |
-| Accounting | `run_completed` + `local_readiness_pass` appended; earlier `run_blocked` / `repair_budget_conflict` / infra failures preserved | `.allforai/bootstrap/run-log.jsonl`, `run-summary.md` |
+| `npm run typecheck` | exit 0, no output | this round |
+| `npm run build` | exit 0 | this round |
+| `npm test` | **115 passed / 115** (13 files) | this round |
+| `node scripts/verify-product-acceptance.mjs` | **24/24 checks passed** | `/tmp/e2e-r2.json` |
+| Clean-directory reproduction | `npm ci` → `npm run build` → README install/capture/settings all succeed | temp copy without `node_modules`, `dist` or orchestration state |
+| Status-line control-sequence probe | newline/tab/ANSI all absent from the rendered line | §3 |
+| Unconfigured-endpoint probe | message **and** filtered text stored locally, job `failed`, no instance, failure notice shown | §3 |
+| Real `~/.claude/settings.json` | sha256 `bfafab88…` unchanged, 0 refluent entries | this round |
+| Real `~/.refluent` | absent (every run used temp dirs) | this round |
+| Worktree | clean | this round |
 
-The recorded recovery path is intact and re-readable: `run_blocked`
-(exhausted_obligations) → owner-authorized cycle-2 repair loop → attempt 4 passed →
-closure. No ledger entry was re-priced or reset.
+## 2. What the closed run recorded — historical, not re-verified here
 
-## 2. Product defects found by evidence and fixed
+The workflow itself was closed **before** this pass, against an earlier tree. These
+results are the record of that closure and are **not** evidence about the current code:
 
-Both were on the status line — the surface that carries the product's whole value.
+- 19/19 nodes `completed`; `close-design-fixes` `passed` with 9/9 intents carrying named
+  evidence (`.allforai/bootstrap/close-design-fixes.json`).
+- `verify-design-fixes` reported 23/23 acceptance, **including a real Claude Code 2.1.280
+  session** (hook liveness, the session-start notice visible to the user and unknown to
+  the agent, the wrapped status line rendering two lines, uninstall restoring settings).
+  That session was run during the workflow, not in this pass.
+- `review-experience-runtime-fixes` attempt 4 `passed` (`must_fix_before_release=[]`,
+  `quality_gaps=[]`).
+- Recovery on record: `run_blocked` (exhausted_obligations) → owner-authorized cycle-2
+  repair loop → attempt 4 passed → closure. No ledger entry was re-priced or reset.
 
-| Defect | Before | After | Evidence |
+Explicitly: **the live-session and runtime-review conclusions above were not re-run in
+this pass.** They describe the closure-time tree. This pass changed `src/statusline.ts`,
+`src/cli.ts`, `tests/statusline.test.ts`, one sentence of `docs/analysis-and-data-design.md`
+and `README.md`; the fresh evidence for those changes is §1 and §3.
+
+## 3. Defects found by evidence and fixed
+
+| # | Defect | Before → after | Where |
 | --- | --- | --- | --- |
-| Unbounded line: `original` was capped at 80 chars but `rewrite` and `reason` were unbounded, so a long suggestion pushed the rewrite itself off a narrow pane | 305 chars (a 200-char rewrite + 200-char reason) | 191 chars; worst case 250 | `src/statusline.ts`, `tests/statusline.test.ts`, probe output below |
-| Truncation split a redaction placeholder | `[code] and [code] … and [c…` | `[code] and [code] … and…` (no partial token) | same |
+| 1 | `rewrite` and `reason` were unbounded, so a long suggestion pushed the rewrite itself off a narrow pane | 305 chars → 191; worst case bounded at 250 | `src/statusline.ts` |
+| 2 | Truncation could split a redaction placeholder | `…and [c…` → `…and…` (never a partial `[code]`) | `src/statusline.ts` |
+| 3 | Only `original` was folded to one line; ANSI escapes in `rewrite`/`reason` reached the terminal, contradicting the function's own "no control sequences" contract | ESC present → absent; newline/tab → single spaces | `src/statusline.ts`, repro below |
+| 4 | A closed stdout (`node bin/refluent settings \| head`) crashed with an unhandled `EPIPE` stack trace | exit 0, stderr 0 bytes; **non-EPIPE stdout errors still fail** | `src/cli.ts` |
 
-Fix (minimal, in `src/statusline.ts`): per-field caps `original 80 / rewrite 80 / reason
-60` (worst case 250 chars for the widest label) and a single placeholder-aware
-`truncate()` that drops an unterminated `[code]` before adding the ellipsis.
-
-Measured with the real renderer (`dist/`, temp `REFLUENT_DATA_DIR`, no user data):
+Reproduction for #3 (real renderer, temp `REFLUENT_DATA_DIR`, no user data), before → after:
 
 ```
-B long rewrite+reason: before len=305  after len=191   (40-col rows: 8 -> 5)
-D many placeholders:   before partialPlaceholder=true  after false  ([c… -> [code] …)
+reason: 'line one\nline two\u001b[31mRED\u001b[0m', rewrite: 'First line.\nSecond.\tTabbed.'
+before: "... (Chinglish 搭配: line one line two\u001b[31mRED\u001b[0m)"   has newline=false tab=false ESC=true
+after:  "... (Chinglish 搭配: line one line twoRED)"                    has newline=false tab=false ESC=false
 ```
 
-Third, smaller fix: `src/cli.ts` now ends quietly when stdout is closed by the reader
-(`refluent settings | head`), instead of dying with an unhandled `EPIPE` stack trace.
-Verified: pipeline exit 0, stderr 0 bytes.
+Reproduction for #4:
 
-Design doc kept true: `docs/analysis-and-data-design.md` §1 `surface` now states the
-display budget and the placeholder rule.
+```
+$ REFLUENT_DATA_DIR=… node bin/refluent settings | head -3     # with pipefail
+before: "Error: write EPIPE" stack trace, non-zero exit
+after : pipeline exit 0, stderr 0 bytes
+```
 
-## 3. Verification artifacts corrected
+Fix #4 keeps failure semantics: the guard treats only `EPIPE` as a normal end and
+rethrows every other stdout write error, so installing the listener does not swallow real
+failures.
 
-`scripts/verify-product-acceptance.mjs` (the committed end-to-end harness) was reporting
-**2 stale failures** that encoded the pre-Task-3 behaviour — a reproducibility problem,
-not a product defect:
+Design doc kept true: `docs/analysis-and-data-design.md` §1 `surface` states the display
+budget, the placeholder rule and the control-sequence guarantee.
+
+## 4. Verification artifacts corrected
+
+`scripts/verify-product-acceptance.mjs` was reporting **2 stale failures** that encoded the
+pre-Task-3 behaviour — a reproducibility problem, not a product defect:
 
 - `new-session-2-3-questions` expected session start to print 2–3 numbered questions with
   `Context:`. Since Task 3 it emits one JSON `systemMessage` with the due count. Replaced
   by `session-start-notice-user-only`, which asserts the confirmed behaviour **and** that
   session start creates no `review_questions` row and leaks no stored sentence.
 - `review-question-types-and-context` read the question table *before* `refluent review`
-  ran (it used to be populated at session start). Moved after the review round, where it
-  now observes the three production question types and their original-sentence context.
+  ran (it used to be populated at session start). Moved after the review round.
 
 Added coverage for the gaps the coordinator named: `statusline-bounded-and-placeholder-safe`
 (long text + 12 `[code]` placeholders), `uninstall-restores-user-settings` (last loop step,
-byte-for-byte restoration of the user's own statusLine and keys), `closed-stdout-no-crash`.
+byte-for-byte restoration), `closed-stdout-no-crash`.
 
-Harness result: **24/24 checks passed** (`/tmp/e2e-committed.json`). It uses throwaway
-`REFLUENT_DATA_DIR` / `REFLUENT_CLAUDE_SETTINGS` and a local fake OpenAI-compatible
-endpoint, so no network and no real configuration are involved.
+The harness exercises the loop end to end with the real `bin/refluent`, the real hook
+entrypoints, real SQLite and a **local** fake OpenAI-compatible endpoint (no network, no
+real configuration): install → capture (stdout 0 bytes, raw text byte-identical) → filtering
+(no knowledge point from code/logs/stack/imperatives) → suggestion + knowledge point →
+recurrence instead of duplicate → session-start notice → review (3 types, original context)
+→ answer feedback → privacy (no code/log/error token in any model request) → offline
+readability → failed/slow analysis never delay the message → uninstall restoration.
 
-Critical checks it exercises end to end (real `bin/refluent`, real hook entrypoints, real
-SQLite): install → capture (stdout 0 bytes, raw text byte-identical) → filtering (code /
-logs / stack / imperative produce no knowledge point) → suggestion + knowledge point →
-recurrence links instead of duplicating → session-start notice → review (3 types, each
-with original context) → answer feeds back → privacy (no code/log/error token in any
-model request) → offline readability → failed and slow analysis never delay or alter the
-message → uninstall restores the user's settings.
+## 5. Reproduction
 
-## 4. Reproduction
-
-README (`README.md`) now carries purpose, prerequisites, install/use/test/uninstall, data
-and privacy, and known limits. Verified from a genuinely clean copy (no `node_modules`,
-`dist`, or orchestration state):
+`README.md` carries purpose, prerequisites, install/use/test/uninstall, the data/privacy
+boundary and known limits. Verified from a genuinely clean copy:
 
 ```
 npm ci            -> exit 0
 npm run build     -> exit 0
-npm test          -> 114 passed (13 files)
-README isolated smoke (install -> capture hook -> settings) -> hook status installed_and_loaded
+README install / capture / settings in an isolated temp dir -> hook status installed_and_loaded
 ```
-
-## 5. Checks at the verified commit
-
-| Check | Result |
-| --- | --- |
-| `node --version` | v26.7.0 (engine requires >= 22) |
-| `npm run typecheck` | exit 0, no output |
-| `npm run build` | exit 0 |
-| `npm test` | 114 passed / 114 (13 files) |
-| `node scripts/verify-product-acceptance.mjs` | 24/24 |
-| Worktree | clean (`git status --porcelain` empty) |
-| Tracked files | 46 (implementation, tests, docs, config, harness) |
-| Real `~/.claude/settings.json` | sha256 `bfafab88…` **unchanged**, 0 refluent entries |
-| Real `~/.refluent` | absent (all runs used temp dirs) |
 
 ## 6. Git / tracking scope
 
-- Commit `9da1a29` adds the implementation, tests, docs, entrypoints, config and the
-  verification harness (46 files, 9568 insertions). Local only: **not pushed, not
-  published, nothing deleted**.
-- `.gitignore` now also excludes the myskills orchestration state (`.allforai/`, `.pi/`)
-  because it holds captured terminal transcripts, freshness observations and the local
-  decision journal rather than product source, plus `__pycache__/` for the copied
-  orchestrator helpers. That state stays on disk untouched — it is excluded, not removed.
-- A stray empty `./.refluent/` at the repo root (residue from an earlier probe) was
-  removed; the design keeps learner data in `~/.refluent`.
+- `9da1a29` adds the implementation, tests, docs, entrypoints, config and harness (46 files).
+  `2c8cf60` adds this round's fixes; `caa7546`/`c011bd3` add this report.
+  **Local only: not pushed, nothing published or deleted.**
+- `.gitignore` also excludes myskills orchestration state (`.allforai/`, `.pi/`) — it holds
+  captured terminal transcripts, freshness observations and the local decision journal,
+  not product source — plus `__pycache__/` for the copied orchestrator helpers. That state
+  stays on disk untouched; it is excluded, not removed.
+- A stray empty `./.refluent/` at the repo root (probe residue) was removed.
 
 ## 7. Post-run state reconciliation (disclosed)
 
-My post-run edits touched a tracked design document, so the run's recorded freshness went
-`not_ready` and `external-changes` reported drift. That was reconciled with the protocol's
-own boundary check rather than hidden, and the reconciliation is itself bookkeeping:
+This pass edited a tracked design document, so the run's recorded freshness went
+`not_ready` and `external-changes` reported drift. It was reconciled with the protocol's
+own boundary check rather than hidden:
 
-1. `{"operation":"external-changes"}` classified the only changed product document
-   (`docs/analysis-and-data-design.md`) as **`fact-update`** for `verify-design-fixes` —
-   the recorded acceptance still passes on the current source, so it is an implementation
-   fact, not a product conflict.
+1. `{"operation":"external-changes"}` classified the only changed product document as
+   **`fact-update`** for `verify-design-fixes` — the recorded acceptance still passes on the
+   current source, so it is an implementation fact, not a product conflict.
 2. `docs/progress/local-readiness.md` (this report) was initially unmapped and reported
-   `uncertain`. It is a generated report, not product source, so it is now declared in
-   `workflow.json.generated_outputs` — recorded in `reconciliation_applied` with the
-   reason. That is a judgement call about tracking, stated here rather than buried.
-3. The affected nodes' contracts and evidence were re-observed and republished in
-   dependency order. **This re-binding asserts no new verification**: the substantive
-   evidence for the changed surfaces is the fresh `npm test` (114/114) and harness run
-   (24/24) at commit `9da1a29`, listed in §5.
+   `uncertain`. It is a generated report, not product source, so it is declared in
+   `workflow.json.generated_outputs`, recorded in `reconciliation_applied` with the reason.
+   That is a judgement call about tracking, stated here rather than buried.
+3. Affected nodes were re-observed and republished in dependency order, using each node's
+   declared artifact gate as the publish command.
 
-Final state after reconciliation: `validate_bootstrap` passed, `check_decision_inputs`
-OK, every node's artifacts `all_exist`, `readiness` **ready** (0 blockers),
+**What that re-binding does and does not assert.** It restores the structural binding
+between each node's inputs and the current tree; it runs no node's substantive acceptance
+again. Read as evidence it would be over-read: the node reports describe the closure-time
+state (§2), and the only node whose publish ran a content check was
+`refresh-analysis-and-data-design`, whose `document_verification` executed against the
+current document. The fresh evidence for the code changed in this pass is §1 and §3.
+
+Final state after reconciliation: `validate_bootstrap` passed, `check_decision_inputs` OK,
+every node's artifacts `all_exist`, `readiness` **ready** (0 blockers),
 `external-changes` **clear**.
 
 ## 8. Unresolved / disclosed
 
-1. **Known, disclosed product limitations** (carried forward from the closed run, not
-   defects): no screenshot manifest exists for a CLI, so the runtime critique recorded
-   `insufficient_evidence`; `[code]` placeholders inside review context can read oddly for
-   a sentence that was mostly code; one `src/review.ts` comment still attributes the
-   pending-question table to session start (a comment-only nit).
-2. **Display budget is a deliberate trade-off.** The line is bounded (≤250 chars) but not
-   forced to fit a 40-column pane: `original → rewrite (why)` is inherently longer, and
+1. **Known, disclosed product limitations** carried forward from the closed run: no
+   screenshot manifest exists for a CLI (`insufficient_evidence` in the runtime critique);
+   `[code]` placeholders inside review context can read oddly for a sentence that was
+   mostly code; one `src/review.ts` comment still attributes the pending-question table to
+   session start (comment-only nit). None of these were changed.
+2. **The display budget is a deliberate trade-off.** The line is bounded (≤250 chars) but
+   not forced to fit a 40-column pane: `original → rewrite (why)` is inherently longer, and
    cutting to 40 columns would remove the rewrite the line exists to show. A narrower cap
    (`original/rewrite 60`, `reason 40`) is a one-line change if the coordinator prefers it.
-3. **Worst-case line is 250 chars**, so on a very narrow pane it still wraps to ~5 rows at
-   40 columns. Only the fields are capped; there is no width-adaptive mode.
-4. **`docs/superpowers/plans/2026-09-23-refluent-design-fixes.md` contains one absolute
-   machine path** (`~/workspace/refluent`). Left untouched on purpose: it is the
-   plan record the run was audited against, and rewriting the user's plan was out of scope.
-5. **Not verified in this pass**: Windows paths, a real paid model endpoint (the harness
-   uses a local fake), and a real Claude Code TUI session (verified earlier in the run,
-   not re-run here to avoid touching the user's configuration).
-6. **`src/review.ts` comment nit** and the `docs/experience-review/*.md` historical review
-   notes were left as-is; they are record, not claims about current behaviour.
-7. **The run's recorded freshness was re-bound after my edits** (see §7). A reviewer who
-   reads the node reports as fresh evidence for the *current* tree would be over-reading
-   them: they describe the state at closure, before this pass. The pass's own evidence is
-   §5.
+   Worst case still wraps to ~5 rows at 40 columns; there is no width-adaptive mode.
+3. **Hooks were not re-exercised against a live Claude Code session in this round** — that
+   would mean touching the user's real configuration. The earlier session evidence is
+   historical (§2).
+4. **Only the local fake endpoint is exercised.** Behaviour against a real paid endpoint
+   (auth, model quirks, latency) is untested.
+5. **One committed doc contains an absolute machine path**
+   (`docs/superpowers/plans/2026-09-23-refluent-design-fixes.md`). Left untouched on
+   purpose: it is the plan record the run was audited against.
+6. **Windows paths are untested.**
 
 ## 9. Evidence locations
 
-- Build/test/harness outputs: `/tmp/e2e-committed.json`, `/tmp/e2e-final.json` (this
-  session); the harness writes a fresh JSON wherever it is pointed.
-- The run's own evidence (orchestration state, on disk, untracked):
+- This round: `/tmp/e2e-r2.json` (harness), plus the probe outputs quoted in §3.
+- The run's own record (orchestration state, on disk, untracked):
   `.allforai/bootstrap/verify-design-fixes.json`,
   `.allforai/bootstrap/review-experience-runtime-fixes.json`,
   `.allforai/bootstrap/close-design-fixes.json`,
+  `.allforai/bootstrap/run-log.jsonl`, `.allforai/bootstrap/run-summary.md`,
   `.allforai/quality-checks/design-fixes-evidence/`.
