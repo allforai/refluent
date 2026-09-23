@@ -1,0 +1,212 @@
+{
+  "generated_at": "2026-09-23T15:03:19.058Z",
+  "harness": "scripts/verify-product-acceptance.mjs",
+  "node_version": "v26.7.0",
+  "main_data_dir": "/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data",
+  "checks": [
+    {
+      "id": "install",
+      "command": "REFLUENT_DATA_DIR=/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data node bin/refluent install --yes",
+      "exit_code": 0,
+      "observed": "exit 0; stdout has \"endpoint status: ready\"=true",
+      "verdict": "passed",
+      "detail": "refluent install\n  data directory : /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data\n  hook location  : /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/claude-settings.json\n  scope          : your outgoing Claude Code messages only — never agent replies, code or logs.\n  effect         : the message sent to the agent is never changed or delayed.\n  analysis model : configured via REFLUENT_MODEL_ENDPOINT / REFLUENT_MODEL_API_KEY / REFLUENT_MODEL.\n\n  Local data directory is writable: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data\n  Wrote the UserPromptSubmit and SessionStart hooks and the statusLine to: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/claude-settings.json\n  Claude Code has not run the hook yet: send any message there, then run `refluent settings` to confirm.\n  Only your outgoing messages are captured; agent replies, code and logs are never captured.\n  Analysis endpoint probe succeeded: ready.\n\n  hook status    : installed_not_loaded\n  endpoint status: ready\n  capture        : enabled\n  next           : send your next message in Claude Code to see the first suggestion.\n"
+    },
+    {
+      "id": "target-users-surfaces",
+      "command": "node bin/refluent help  +  sqlite_master table list",
+      "exit_code": 0,
+      "observed": "tables=[analysis_jobs,instance_knowledge_points,instances,knowledge_points,review_answers,review_questions,review_states,schema_migrations,settings,sqlite_sequence]; lesson/catalog table present=false; help lists course commands=false",
+      "verdict": "passed",
+      "detail": "refluent — learn English phrasing from your own coding-agent messages.\n\nCommands:\n  refluent install [--yes|--no]      authorize hooks and check the analysis endpoint\n  refluent uninstall                  remove the hooks and restore your own statusLine\n  refluent settings [show]           show switches and real enablement state\n  refluent settings set <key> <val>  change a switch\n  refluent settings reset            restore defaults\n  refluent review                    answer due production questions\n  refluent hook <name>               hook entrypoint (user-prompt-submit|session-start|statusline)\n  refluent analyze-job <id>          run one queued analysis job\n\nLocal data: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data/analysis-and-data.sqlite\nClaude Code settings: /var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/claude-settings.json\n"
+    },
+    {
+      "id": "capture-filtered-no-action",
+      "command": "printf '<UserPromptSubmit JSON prompt=\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\">' | node bin/refluent hook user-prompt-submit",
+      "exit_code": 0,
+      "observed": "exit 0; stdout 0 bytes; stderr 0 bytes",
+      "verdict": "passed",
+      "detail": ""
+    },
+    {
+      "id": "captured-bytes-exact",
+      "command": "read analysis_jobs WHERE message_id=msg-1",
+      "exit_code": null,
+      "observed": "raw_text byte-for-byte equal=true; filtered_text=\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\"; status=done; skip_reason=null",
+      "verdict": "passed",
+      "detail": "{\"id\":1,\"message_id\":\"msg-1\",\"session_id\":\"session-1\",\"raw_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"filtered_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"skip_reason\":null,\"status\":\"done\",\"error\":null,\"created_at\":\"2026-09-23T15:03:16.883Z\",\"finished_at\":\"2026-09-23T15:03:16.902Z\",\"latency_ms\":17}"
+    },
+    {
+      "id": "suggestion-produced-stored",
+      "command": "read instances + knowledge_points after capture",
+      "exit_code": null,
+      "observed": "instances for job=1; issue_class=chinese_code_mixing; rewrite=\"Can you help me look into this bug? I already fixed it, but the test still fails.\"; reason=\"Mixed Chinese with English; use the natural phrasal verb.\"; kp.canonical_form=look into",
+      "verdict": "passed",
+      "detail": "{\"inst1\":[{\"id\":1,\"analysis_job_id\":1,\"original_text\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"rewrite_text\":\"Can you help me look into this bug? I already fixed it, but the test still fails.\",\"reason\":\"Mixed Chinese with English; use the natural phrasal verb.\",\"issue_class\":\"chinese_code_mixing\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"source\":\"claude-code:UserPromptSubmit\",\"message_id\":\"msg-1\",\"session_id\":\"session-1\",\"model\":\"fake-model\",\"model_version\":\"fake-model\",\"filter_version\":\"filter-v2\"}],\"kp1\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":1,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:16.902Z\"}}"
+    },
+    {
+      "id": "suggestion-produced-stored",
+      "command": "node bin/refluent hook statusline",
+      "exit_code": 0,
+      "observed": "stdout=\"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\"",
+      "verdict": "passed",
+      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+    },
+    {
+      "id": "capture-filtered-no-action",
+      "command": "node bin/refluent hook user-prompt-submit (grammar messages msg-2, msg-3)",
+      "exit_code": 0,
+      "observed": "msg-2 exit=0 stdout=0B; msg-3 exit=0 stdout=0B; knowledge_points=3",
+      "verdict": "passed",
+      "detail": ""
+    },
+    {
+      "id": "imperative-code-log-no-kp",
+      "command": "node bin/refluent hook user-prompt-submit x4 (code-only, log, stack, imperative)",
+      "exit_code": 0,
+      "observed": "code-only: exit=0 status=filtered skip=empty_after_filter stdout=0B | log: exit=0 status=filtered skip=empty_after_filter stdout=0B | stack: exit=0 status=filtered skip=empty_after_filter stdout=0B | imperative: exit=0 status=filtered skip=too_short stdout=0B; knowledge_points 3->3; model requests 3->3",
+      "verdict": "passed",
+      "detail": "code-only: exit=0 status=filtered skip=empty_after_filter stdout=0B\nlog: exit=0 status=filtered skip=empty_after_filter stdout=0B\nstack: exit=0 status=filtered skip=empty_after_filter stdout=0B\nimperative: exit=0 status=filtered skip=too_short stdout=0B"
+    },
+    {
+      "id": "accumulates-from-daily-work",
+      "command": "read knowledge_points after hook captures only (no review/CLI surface opened)",
+      "exit_code": null,
+      "observed": "knowledge_points=3; review/learning app was never invoked before this read",
+      "verdict": "passed",
+      "detail": "3"
+    },
+    {
+      "id": "first-value-no-course",
+      "command": "install --yes then one hook message then statusline (no lesson step)",
+      "exit_code": 0,
+      "observed": "after install + 1 captured message the statusLine already shows: \"refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\"",
+      "verdict": "passed",
+      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+    },
+    {
+      "id": "one-suggestion-original-rewrite-why",
+      "command": "statusline format + instances-per-job",
+      "exit_code": null,
+      "observed": "one instance for job=1; statusline has original→rewrite(reason)=true; model returned 2 issues but stored issue_class=chinese_code_mixing",
+      "verdict": "passed",
+      "detail": "refluent: Can you help me 看看 this bug? I already 修复 it but the test still fail. → Can you help me look into this bug? I already fixed it, but the test still fail… (中式夹英: Mixed Chinese with English; use the natural phrasal verb.)\n"
+    },
+    {
+      "id": "kp-canonical-review-state",
+      "command": "read knowledge_points + review_states",
+      "exit_code": null,
+      "observed": "kp.canonical_form=\"look into\"; kp.match_key=\"expression-unit:look into\"; review_states.state=new; reps=0",
+      "verdict": "passed",
+      "detail": "{\"kp1\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":1,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:16.902Z\"},\"rs\":{\"knowledge_point_id\":1,\"due_at\":\"2026-09-23T15:03:16.902Z\",\"state\":\"new\",\"stability\":null,\"difficulty\":null,\"reps\":0,\"lapses\":0,\"last_review_at\":null,\"last_rating\":null,\"scheduler\":\"fsrs-5\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:16.902Z\"}}"
+    },
+    {
+      "id": "recurrence-links-not-duplicate",
+      "command": "node bin/refluent hook user-prompt-submit (2nd \"look into\" message)",
+      "exit_code": 0,
+      "observed": "knowledge_points 3->3; occurrence_count=2; link role=recurrence",
+      "verdict": "passed",
+      "detail": "{\"kpAfter\":{\"id\":1,\"kind\":\"expression-unit\",\"canonical_form\":\"look into\",\"match_key\":\"expression-unit:look into\",\"rule_key\":null,\"explanation\":\"investigate; use the phrasal verb 'look into'.\",\"occurrence_count\":2,\"first_instance_id\":1,\"status\":\"active\",\"created_at\":\"2026-09-23T15:03:16.902Z\",\"updated_at\":\"2026-09-23T15:03:17.286Z\"},\"link4\":{\"role\":\"recurrence\"}}"
+    },
+    {
+      "id": "code-stripped-before-model",
+      "command": "node bin/refluent hook user-prompt-submit (prose + fenced code + inline code)",
+      "exit_code": 0,
+      "observed": "filtered_text=\"Please refactor the helper below and keep the call site working. The helper is used in checkout.\"",
+      "verdict": "passed",
+      "detail": "Please refactor the helper below and keep the call site working. The helper is used in checkout."
+    },
+    {
+      "id": "session-start-notice-user-only",
+      "command": "node bin/refluent hook session-start",
+      "exit_code": 0,
+      "observed": "stdout=\"{\\\"systemMessage\\\":\\\"refluent: 3 review item(s) from your own sentences are due. Run `refluent review` in a terminal.\\\"}\\n\"; keys=[systemMessage]; review_questions 0->0; leaks a stored sentence=false",
+      "verdict": "passed",
+      "detail": "{\"systemMessage\":\"refluent: 3 review item(s) from your own sentences are due. Run `refluent review` in a terminal.\"}\n"
+    },
+    {
+      "id": "statusline-bounded-and-placeholder-safe",
+      "command": "node bin/refluent hook statusline with a long suggestion and with 12 [code] placeholders",
+      "exit_code": 0,
+      "observed": "long-line chars=250 (narrow 40-col rows=7); placeholder-line chars=143; '[' count=7 vs complete '[code]' count=7",
+      "verdict": "passed",
+      "detail": "refluent: Please xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx the call at… → Can you help me look into this bug? I already fixed it, but the test still fail… (Chinglish 搭配: Mixed Chinese with English; prefer the natural phrasal verb…)\nrefluent: [code] and [code] and [code] and [code] and [code] and [code] and [code] and… → Keep the sentence natural. (Chinglish 搭配: Chinglish.)"
+    },
+    {
+      "id": "review-answer-feedback-loop",
+      "command": "interactive stdin: 'Can you help me look this bug in my code' ; 'He runs the tests every morning.' ; 'went' | node bin/refluent review",
+      "exit_code": 0,
+      "observed": "exit=0; review instances written=1; answers=3; answer ratings=[1,3,]",
+      "verdict": "passed",
+      "detail": "refluent review: 3 question(s) from your own sentences.\n\nQuestion 1/3 [zh-to-en]\n用英文表达：请帮我看看这个登录 bug。\n  Context: \"Can you help me 看看 this bug? I already 修复 it but the test still fail.\"\nYour answer (or press Enter to skip, q to quit): Needs work. Use the phrasal verb 'look into'.\nMore natural: Can you help me look into this bug?\n\nQuestion 2/3 [rewrite-original]\nRewrite naturally: \"He run the tests every morning.\"\n  Context: \"She go to the office every day and the build fail on her machine.\"\nYour answer (or press Enter to skip, q to quit): Correct. Looks good — no improvement needed.\n\nQuestion 3/3 [fill-in]\nWrite the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\n  Context: \"Yesterday I go to the meeting and I tell them about the plan.\"\nYour answer (or press Enter to skip, q to quit): Not graded. Could not grade this answer without the analysis model; your schedule is unchanged.\n\nSession: 3 answered, 1 correct, 1 not graded.\n"
+    },
+    {
+      "id": "review-question-types-and-context",
+      "command": "node bin/refluent review (the review round builds its own pending set)",
+      "exit_code": 0,
+      "observed": "types=[zh-to-en,rewrite-original,fill-in]; all questions have original context=true; contexts=[\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\",\"She go to the office every day and the build fail on her machine.\",\"Yesterday I go to the meeting and I tell them about the plan.\"]",
+      "verdict": "passed",
+      "detail": "[{\"id\":1,\"knowledge_point_id\":1,\"type\":\"zh-to-en\",\"prompt\":\"用英文表达：请帮我看看这个登录 bug。\",\"expected\":\"look into\",\"context_instance_id\":1,\"generated_at\":\"2026-09-23T15:03:17.508Z\",\"model\":\"fake-model\",\"status\":\"answered\"},{\"id\":2,\"knowledge_point_id\":2,\"type\":\"rewrite-original\",\"prompt\":\"Rewrite naturally: \\\"He run the tests every morning.\\\"\",\"expected\":\"third-person singular -s\",\"context_instance_id\":2,\"generated_at\":\"2026-09-23T15:03:17.510Z\",\"model\":\"fake-model\",\"status\":\"answered\"},{\"id\":3,\"knowledge_point_id\":3,\"type\":\"fill-in\",\"prompt\":\"Write the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\",\"expected\":\"past tense verb form\",\"context_instance_id\":3,\"generated_at\":\"2026-09-23T15:03:17.512Z\",\"model\":null,\"status\":\"answered\"}]"
+    },
+    {
+      "id": "privacy-no-code-logs-errors",
+      "command": "inspect every request body received by the local model endpoint",
+      "exit_code": null,
+      "observed": "requests=10; analyze requests=7 (5 match a stored filtered_text; the remainder is the filtered review answer); forbidden-token leaks=[]; code/log/stack raw_text echoed to the model=0; mixed-code request user content=\"Please refactor the helper below and keep the call site working. The helper is used in checkout.\"; equals raw_text=false",
+      "verdict": "passed",
+      "detail": "{\"leaked\":[],\"analyzeContentCount\":7,\"analyzeMatchesFiltered\":5,\"rawEchoed\":[],\"mixedRequest\":\"Please refactor the helper below and keep the call site working. The helper is used in checkout.\"}"
+    },
+    {
+      "id": "local-offline-readable",
+      "command": "stop model endpoint, unset REFLUENT_MODEL_*, then hook statusline + review",
+      "exit_code": 0,
+      "observed": "db file=/var/folders/yk/1lzd8nn12m50n2l4gd8r28340000gp/T/refluent-verify-main-PItkxm/data/analysis-and-data.sqlite exists=true; offline statusline=\"refluent: Can you help me look this bug in my code → Can you help me look into this bug? (Chinglish 搭配: Use the phrasal verb 'look into'.)\"; offline review exit=0",
+      "verdict": "passed",
+      "detail": "refluent: Can you help me look this bug in my code → Can you help me look into this bug? (Chinglish 搭配: Use the phrasal verb 'look into'.)\n---\nrefluent review: 1 question(s) from your own sentences.\n\nQuestion 1/1 [fill-in]\nWrite the English expression with the blank filled in: ____ (meaning: Use went/told for actions finished in the past.)\n  Context: \"Yesterday I go to the meeting and I tell them about the plan.\"\nYour answer (or press Enter to skip, q to quit): \nSession: 0 answered, 0 correct.\n"
+    },
+    {
+      "id": "failed-analysis-no-effect",
+      "command": "endpoint returns HTTP 500; inline analysis; node bin/refluent hook user-prompt-submit",
+      "exit_code": 0,
+      "observed": "exit=0; stdout=0B; stderr=0B; job.status=failed; instances=0",
+      "verdict": "passed",
+      "detail": "{\"id\":1,\"message_id\":\"fail-1\",\"session_id\":\"session-1\",\"raw_text\":\"Can you help me look this bug? I want the phrasing to read naturally.\",\"filtered_text\":\"Can you help me look this bug? I want the phrasing to read naturally.\",\"skip_reason\":null,\"status\":\"failed\",\"error\":\"analysis_unavailable\",\"created_at\":\"2026-09-23T15:03:18.834Z\",\"finished_at\":\"2026-09-23T15:03:18.849Z\",\"latency_ms\":14}"
+    },
+    {
+      "id": "slow-analysis-no-delay",
+      "command": "endpoint delays 6000ms; detached analysis (no REFLUENT_INLINE_ANALYSIS); node bin/refluent hook user-prompt-submit",
+      "exit_code": 0,
+      "observed": "hook elapsed=39ms while the model endpoint delays 6000ms; exit=0; stdout=0B; job was queued for detached analysis status=queued",
+      "verdict": "passed",
+      "detail": "{\"slowHook\":{\"code\":0,\"stdout\":\"\",\"stderr\":\"\",\"stdoutBytes\":0,\"stderrBytes\":0,\"elapsedMs\":39},\"slowJob\":{\"status\":\"queued\"}}"
+    },
+    {
+      "id": "uninstall-restores-user-settings",
+      "command": "node bin/refluent install --yes ; node bin/refluent uninstall (user already had a statusLine)",
+      "exit_code": 0,
+      "observed": "install exit=0; installed statusLine wraps refluent=true; after uninstall model=opus; statusLine restored=true; 'hooks' key present=false",
+      "verdict": "passed",
+      "detail": "{\"wrapped\":{\"model\":\"opus\",\"statusLine\":{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook statusline\"},\"hooks\":{\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook user-prompt-submit\"}]}],\"SessionStart\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/opt/homebrew/Cellar/node/26.7.0/bin/node ~/workspace/refluent/bin/refluent hook session-start\"}]}]}},\"restored\":{\"model\":\"opus\",\"statusLine\":{\"type\":\"command\",\"command\":\"/opt/mine/statusline.sh\",\"padding\":0}}}"
+    },
+    {
+      "id": "closed-stdout-no-crash",
+      "command": "node bin/refluent settings with the reading end of stdout closed after the first chunk",
+      "exit_code": 0,
+      "observed": "exit=0; stderr bytes=0; stderr=\"\"",
+      "verdict": "passed",
+      "detail": ""
+    }
+  ],
+  "model_requests": [
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"She go to the office every day and the build fail on her machine.\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"Yesterday I go to the meeting and I tell them about the plan.\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"Can you help me look this bug? I want the phrasing to read naturally.\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"Please refactor the helper below and keep the call site working. The helper is used in checkout.\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You generate one short English practice question for a developer. You receive a knowledge point as canonical_form plus explanation and a question type. Return a single JSON object and nothing else with fields: prompt: the question text shown to the learner; expected: the target English expression (the canonical form), or null. For type \\\"zh-to-en\\\", write the prompt as a Chinese rendering of the meaning so the learner produces the English. For type \\\"rewrite-original\\\", write a fresh short sentence that contains the same mistake so the learner transfers the rule. For type \\\"fill-in\\\", blank the target span with ____. Do not include any code, logs or error output.\"},{\"role\":\"user\",\"content\":\"{\\\"kind\\\":\\\"expression-unit\\\",\\\"canonical_form\\\":\\\"look into\\\",\\\"explanation\\\":\\\"investigate; use the phrasal verb 'look into'.\\\",\\\"rule_key\\\":null,\\\"type\\\":\\\"zh-to-en\\\",\\\"context\\\":\\\"Can you help me 看看 this bug? I already 修复 it but the test still fail.\\\"}\"}],\"temperature\":0,\"max_tokens\":256,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You generate one short English practice question for a developer. You receive a knowledge point as canonical_form plus explanation and a question type. Return a single JSON object and nothing else with fields: prompt: the question text shown to the learner; expected: the target English expression (the canonical form), or null. For type \\\"zh-to-en\\\", write the prompt as a Chinese rendering of the meaning so the learner produces the English. For type \\\"rewrite-original\\\", write a fresh short sentence that contains the same mistake so the learner transfers the rule. For type \\\"fill-in\\\", blank the target span with ____. Do not include any code, logs or error output.\"},{\"role\":\"user\",\"content\":\"{\\\"kind\\\":\\\"grammar-rule\\\",\\\"canonical_form\\\":\\\"third-person singular -s\\\",\\\"explanation\\\":\\\"Add -s to the verb with he/she/it in the present simple.\\\",\\\"rule_key\\\":\\\"singular-plural\\\",\\\"type\\\":\\\"rewrite-original\\\",\\\"context\\\":\\\"She go to the office every day and the build fail on her machine.\\\"}\"}],\"temperature\":0,\"max_tokens\":256,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You generate one short English practice question for a developer. You receive a knowledge point as canonical_form plus explanation and a question type. Return a single JSON object and nothing else with fields: prompt: the question text shown to the learner; expected: the target English expression (the canonical form), or null. For type \\\"zh-to-en\\\", write the prompt as a Chinese rendering of the meaning so the learner produces the English. For type \\\"rewrite-original\\\", write a fresh short sentence that contains the same mistake so the learner transfers the rule. For type \\\"fill-in\\\", blank the target span with ____. Do not include any code, logs or error output.\"},{\"role\":\"user\",\"content\":\"{\\\"kind\\\":\\\"grammar-rule\\\",\\\"canonical_form\\\":\\\"past tense verb form\\\",\\\"explanation\\\":\\\"Use went/told for actions finished in the past.\\\",\\\"rule_key\\\":\\\"tense\\\",\\\"type\\\":\\\"rewrite-original\\\",\\\"context\\\":\\\"Yesterday I go to the meeting and I tell them about the plan.\\\"}\"}],\"temperature\":0,\"max_tokens\":256,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"Can you help me look this bug in my code\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}",
+    "{\"model\":\"fake-model\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a concise English-writing coach for a developer who works with a coding agent. You receive one piece of natural-language text that a developer wrote to the agent. Return a single JSON object and nothing else with these fields: issue: null, or an object {class, severity, span, explanation} where class is one of \\\"chinese_code_mixing\\\", \\\"grammar_error\\\", \\\"chinglish_collocation\\\", \\\"register_tone\\\", severity is \\\"high\\\"|\\\"medium\\\"|\\\"low\\\", span is the exact substring to improve, explanation is one short sentence. rewrite: the more natural full sentence (equals the original when issue is null). reason: one short sentence naming why, shown in a terminal status line. knowledge_point: null, or {kind, canonical_form, explanation, rule_key} where kind is \\\"expression-unit\\\" or \\\"grammar-rule\\\", canonical_form is the corrected reusable unit (a word, phrase or rule, never the whole sentence), rule_key is one of \\\"tense\\\",\\\"sentence-pattern\\\",\\\"article\\\",\\\"preposition\\\",\\\"singular-plural\\\" for grammar rules. recurrence_of_kp_id: integer or null. Rules: at most one issue; issue=null implies knowledge_point=null; issue!=null implies rewrite, reason and knowledge_point are present; telegraphic agent-command style is acceptable ellipsis, not an error, so never manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged); never mention code, logs or error output because you will not receive them.\"},{\"role\":\"user\",\"content\":\"He runs the tests every morning.\"}],\"temperature\":0,\"max_tokens\":512,\"response_format\":{\"type\":\"json_object\"}}"
+  ]
+}

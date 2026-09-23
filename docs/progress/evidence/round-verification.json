@@ -1,0 +1,81 @@
+{
+  "schema": "refluent/local-readiness-verification/1",
+  "generated_at": "2026-09-23T15:02:41Z",
+  "verified_commit": "fe34e47ac1839ad522e6fedd043b9aad2ce75fa6",
+  "node_version": "v26.7.0",
+  "run_context": {
+    "note": "The myskills workflow closed before this round, on an uncommitted tree; the first implementation commit is 9da1a29. 'changed_this_round' is therefore authored by this round, not derivable from a git diff.",
+    "sibling_commits": [
+      "9da1a29 (implementation+tests+docs+harness)",
+      "2c8cf60 (statusline control chars, EPIPE scope, README accuracy)",
+      "caa7546/c011bd3 (readiness report)"
+    ]
+  },
+  "commands": {
+    "typecheck": {
+      "cmd": "npm run typecheck",
+      "exit_code": 0,
+      "stdout": "> refluent@0.1.0 typecheck\n> tsc -p tsconfig.json --noEmit"
+    },
+    "build": {
+      "cmd": "npm run build",
+      "exit_code": 0,
+      "stdout": "> refluent@0.1.0 build\n> tsc -p tsconfig.json"
+    },
+    "test": {
+      "cmd": "npx vitest run",
+      "exit_code": 0,
+      "tests_passed": 115,
+      "test_files": 13,
+      "raw_tail": " Test Files  13 passed (13)\n      Tests  115 passed (115)\n   Start at  00:02:41\n   Duration  294ms (transform 467ms, setup 0ms, collect 1.12s, tests 121ms, environment 1ms, prepare 538ms)"
+    }
+  },
+  "e2e_harness": {
+    "cmd": "node scripts/verify-product-acceptance.mjs docs/progress/evidence/verify-product-acceptance.json",
+    "checks_total": 24,
+    "checks_passed": 24,
+    "checks_failed": [],
+    "generated_at": "2026-09-23T15:02:28.422Z",
+    "isolation": "temp REFLUENT_DATA_DIR / REFLUENT_CLAUDE_SETTINGS + local fake OpenAI-compatible endpoint; no network, no real Claude config"
+  },
+  "changed_this_round": [
+    "src/statusline.ts",
+    "src/cli.ts",
+    "tests/statusline.test.ts",
+    "docs/analysis-and-data-design.md",
+    "README.md",
+    "scripts/verify-product-acceptance.mjs",
+    "docs/progress/local-readiness.md",
+    ".pi/skills/run/SKILL.md (untracked orchestration tooling)"
+  ],
+  "defects_fixed_this_round": [
+    {
+      "id": "statusline-unbounded-fields",
+      "before_chars": 305,
+      "after_chars": 191,
+      "worst_case_chars": 250
+    },
+    {
+      "id": "statusline-truncation-split-placeholder",
+      "before": "[c…",
+      "after": "complete [code] only"
+    },
+    {
+      "id": "statusline-control-sequences",
+      "before": "ESC present in rendered line",
+      "after": "no ESC/newline/tab"
+    },
+    {
+      "id": "cli-epipe",
+      "before": "unhandled EPIPE stack trace",
+      "after": "exit 0 for EPIPE; other stdout errors still fail"
+    }
+  ],
+  "not_re_run_this_round": [
+    "real Claude Code TUI session (would require touching the user's real configuration)",
+    "independent runtime experience review of the product",
+    "behaviour against a real paid model endpoint",
+    "Windows paths"
+  ],
+  "claim_scope": "This artifact evidences THIS round on the current tree. The workflow's own 19/19 closure, 23/23 acceptance and attempt-4 runtime review describe the closure-time tree and are historical; no report here claims this round re-performed an independent review."
+}

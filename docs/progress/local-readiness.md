@@ -1,8 +1,8 @@
 # Local readiness report — refluent
 
 Date: 2026-09-23
-**Verified commit for this round: `2c8cf60`** (`git log` is the authority for the commit
-that adds this report.)
+**Code verified this round: `2c8cf60`.** Evidence artifacts were added after it (§9);
+`git log` is the authority for their commits.
 
 Scope: bring the already-reviewed delivery to a reproducible, verified, locally committed
 state within the confirmed product requirements. No new product features, no push, nothing
@@ -20,7 +20,8 @@ Everything in this section was produced by this round, on the tree at `2c8cf60`
 | `npm run typecheck` | exit 0, no output | this round |
 | `npm run build` | exit 0 | this round |
 | `npm test` | **115 passed / 115** (13 files) | this round |
-| `node scripts/verify-product-acceptance.mjs` | **24/24 checks passed** | `/tmp/e2e-r2.json` |
+| `node scripts/verify-product-acceptance.mjs` | **24/24 checks passed** | `docs/progress/evidence/verify-product-acceptance.json` |
+| Round verification artifact | commit, changed surfaces, exit codes, counts, non-re-runs | `docs/progress/evidence/round-verification.json` |
 | Clean-directory reproduction | `npm ci` → `npm run build` → README install/capture/settings all succeed | temp copy without `node_modules`, `dist` or orchestration state |
 | Status-line control-sequence probe | newline/tab/ANSI all absent from the rendered line | §3 |
 | Unconfigured-endpoint probe | message **and** filtered text stored locally, job `failed`, no instance, failure notice shown | §3 |
@@ -140,15 +141,30 @@ own boundary check rather than hidden:
    `uncertain`. It is a generated report, not product source, so it is declared in
    `workflow.json.generated_outputs`, recorded in `reconciliation_applied` with the reason.
    That is a judgement call about tracking, stated here rather than buried.
-3. Affected nodes were re-observed and republished in dependency order, using each node's
-   declared artifact gate as the publish command.
+3. Affected nodes were re-observed and republished in dependency order, **bound to real
+   acceptance commands rather than the artifact gate**: `implement-design-fixes`,
+   `repair-design-fixes`, `repair-runtime-experience-fixes` and
+   `repair-runtime-experience-fixes-cycle2` publish against
+   `sh -c 'npm run typecheck && npm run build && npm test'`; `verify-design-fixes` publishes
+   against the end-to-end harness; `refresh-analysis-and-data-design` publishes against its
+   declared design-document check. (An earlier pass had used `check_artifacts --node <id>`
+   as the command; that only asserts artifact presence and was replaced.)
+4. The earlier `run_completed` (19/19) is a **historical** completion record. The run log now
+   carries an appended `run_log_correction` entry saying exactly that, so the closure cannot
+   be read as "all nodes re-verified on the current tree". Earlier failures and repair spend
+   are untouched.
+5. The project's generated run skill (`.pi/skills/run/SKILL.md`, untracked orchestration
+   tooling) was minimally synced from the development source at `myskills` SHA `fe5006d6`:
+   the Core Loop now publishes the worker's `acceptance_argv` **before** the independent
+   artifact gate (and states that `check_artifacts --json` cannot be that argv, because it
+   always exits 0), and Post-Completion records a terminal `run_completed` / `run_blocked`
+   event. Project customizations were preserved; nothing was replaced wholesale.
 
-**What that re-binding does and does not assert.** It restores the structural binding
-between each node's inputs and the current tree; it runs no node's substantive acceptance
-again. Read as evidence it would be over-read: the node reports describe the closure-time
-state (§2), and the only node whose publish ran a content check was
-`refresh-analysis-and-data-design`, whose `document_verification` executed against the
-current document. The fresh evidence for the code changed in this pass is §1 and §3.
+**What the re-binding does and does not assert.** It restores the structural binding
+between each node's inputs and the current tree and validates it with the project's real
+commands (§7.3), but it does **not** re-perform any node's independent review. Read as
+evidence it would be over-read: the node reports describe the closure-time state (§2).
+The only fresh evidence about the code this pass changed is §1 and §3.
 
 Final state after reconciliation: `validate_bootstrap` passed, `check_decision_inputs` OK,
 every node's artifacts `all_exist`, `readiness` **ready** (0 blockers),
@@ -178,7 +194,11 @@ every node's artifacts `all_exist`, `readiness` **ready** (0 blockers),
 
 ## 9. Evidence locations
 
-- This round: `/tmp/e2e-r2.json` (harness), plus the probe outputs quoted in §3.
+- This round, durable in the repo:
+  `docs/progress/evidence/round-verification.json` (commit, changed surfaces, real exit
+  codes, counts, explicit non-re-runs) and
+  `docs/progress/evidence/verify-product-acceptance.json` (the 24-check harness run). Both
+  are declared in `workflow.json.generated_outputs`.
 - The run's own record (orchestration state, on disk, untracked):
   `.allforai/bootstrap/verify-design-fixes.json`,
   `.allforai/bootstrap/review-experience-runtime-fixes.json`,
