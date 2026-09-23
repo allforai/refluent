@@ -111,16 +111,18 @@ export async function runAnalysis(
   } catch {
     result = null;
   }
-
   const latency = Date.now() - startedAt;
   const finishedAt = nowIso();
 
   if (!result) {
+    // Keep the sanitized cause: "analysis_unavailable" alone made a missing
+    // configuration indistinguishable from an HTTP rejection or a timeout.
+    const reason = client.lastFailure ?? 'analysis_unavailable';
     db.prepare(
       "UPDATE analysis_jobs SET status = 'failed', error = ?, finished_at = ?, latency_ms = ? WHERE id = ?",
-    ).run('analysis_unavailable', finishedAt, latency, jobId);
-    setLastAnalysisResult(db, { outcome: 'failed', at: finishedAt, reason: 'analysis_unavailable' });
-    return { status: 'failed', wrote: false, reason: 'analysis_unavailable' };
+    ).run(reason, finishedAt, latency, jobId);
+    setLastAnalysisResult(db, { outcome: 'failed', at: finishedAt, reason });
+    return { status: 'failed', wrote: false, reason };
   }
 
   const outcome = writePath(

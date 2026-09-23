@@ -87,10 +87,10 @@ describe('settings: settings report shows real hook and endpoint liveness', () =
     expect(report.captureReason).toBe('hook_installed');
   });
 
-  it('endpoint liveness with no environment is not_configured and never probes the network', async () => {
+  it('endpoint liveness with no environment or stored config is not_configured and never probes the network', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    const probe = await probeEndpoint({});
+    const probe = await probeEndpoint(db, {});
     expect(probe.status).toBe('not_configured');
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
@@ -100,12 +100,12 @@ describe('settings: settings report shows real hook and endpoint liveness', () =
     const env = { REFLUENT_MODEL_ENDPOINT: 'http://localhost:9/v1', REFLUENT_MODEL: 'small-model' };
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
-    expect((await probeEndpoint(env)).status).toBe('ready');
+    expect((await probeEndpoint(db, env)).status).toBe('ready');
 
     vi.stubGlobal('fetch', vi.fn(async () => {
       throw new Error('connect ECONNREFUSED');
     }));
-    const down = await probeEndpoint(env);
+    const down = await probeEndpoint(db, env);
     expect(down.status).toBe('unreachable');
     expect(down.error).toContain('ECONNREFUSED');
     vi.unstubAllGlobals();
@@ -151,6 +151,38 @@ describe('install: authorization, hook file and loaded state', () => {
     expect(verifyHookConfig(settingsPath)).toBe(true);
     expect(effectiveCaptureEnabled(db)).toEqual({ enabled: true, reason: 'hook_installed' });
     expect(hookStatus(db)).toBe('installed_not_loaded');
+  });
+
+  it('persists the non-secret endpoint and model so hooks do not depend on the shell profile', async () => {
+    const settingsPath = path.join(tmpDir, 'claude', 'settings.json');
+    const env = {
+      REFLUENT_MODEL_ENDPOINT: 'https://openrouter.ai/api/v1/',
+      REFLUENT_MODEL: 'openai/gpt-4o-mini',
+      REFLUENT_MODEL_API_KEY: 'sk-secret-that-must-not-be-stored',
+      OPENROUTER_API_KEY: 'sk-another-value',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    const report = await runInstall(db, {
+      consent: true,
+      settingsPath,
+      nodePath: '/usr/local/bin/node',
+      binPath: '/tmp/bin/refluent',
+      env,
+    });
+    vi.unstubAllGlobals();
+    expect(report.endpoint.status).toBe('ready');
+
+    // Endpoint and model survive; the secret does not.
+    expect(getSetting(db, 'model-endpoint')).toBe('https://openrouter.ai/api/v1');
+    expect(getSetting(db, 'model')).toBe('openai/gpt-4o-mini');
+    expect(JSON.stringify(Object.fromEntries(
+      (db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>).map((r) => [r.key, r.value]),
+    ))).not.toContain('sk-secret');
+
+    // A later hook process with the empty environment still resolves the model.
+    const reportWithEmptyEnv = buildSettingsReport(db);
+    expect(reportWithEmptyEnv.model.endpoint).toBe('https://openrouter.ai/api/v1');
+    expect(reportWithEmptyEnv.model.model).toBe('openai/gpt-4o-mini');
   });
 
   it('verifyHookConfig re-reads the file so a removed registration reports not loaded', () => {

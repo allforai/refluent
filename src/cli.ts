@@ -12,6 +12,7 @@ import {
   PREFERENCE_DEFAULTS,
   PREFERENCE_KEYS,
   allSettings,
+  describeAnalysisFailure,
   effectiveCaptureEnabled,
   getLastAnalysisResult,
   getSetting,
@@ -20,6 +21,15 @@ import {
   hookStatus,
   endpointStatus,
 } from './settings.js';
+import {
+  MODEL_API_KEY_ENV_KEY,
+  MODEL_ENDPOINT_KEY,
+  MODEL_KEY,
+  isModelSettingKey,
+  resolveModelConfig,
+  sanitizedEndpoint,
+  setModelSetting,
+} from './model-config.js';
 import { runReviewSession, type ReviewIO } from './review.js';
 import { runHook, type HookName } from './hook.js';
 
@@ -29,8 +39,8 @@ function resolveBinPath(): string {
   return fileURLToPath(new URL('../bin/refluent', import.meta.url));
 }
 
-function liveClient(): AnalysisClient {
-  return HttpAnalysisClient.fromEnv() ?? new NullAnalysisClient();
+function liveClient(db: DatabaseType): AnalysisClient {
+  return HttpAnalysisClient.fromConfig(resolveModelConfig(db).env) ?? new NullAnalysisClient();
 }
 
 function out(line = ''): void {
@@ -95,6 +105,9 @@ function printHelp(): void {
   out('  refluent uninstall                  remove the hooks and restore your own statusLine');
   out('  refluent settings [show]           show switches and real enablement state');
   out('  refluent settings set <key> <val>  change a switch');
+  out('  refluent settings set model-endpoint <url>   analysis base URL, stored locally');
+  out('  refluent settings set model <id>             analysis model id, stored locally');
+  out('  refluent settings set model-api-key-env <VAR> read the API key from this env var');
   out('  refluent settings reset            restore defaults');
   out('  refluent review                    answer due production questions');
   out('  refluent hook <name>               hook entrypoint (user-prompt-submit|session-start|statusline)');
@@ -163,7 +176,7 @@ async function settingsCommand(args: string[]): Promise<number> {
       db.close();
       return 1;
     }
-    const result = setPreference(db, key, value);
+    const result = isModelSettingKey(key) ? setModelSetting(db, key, value) : setPreference(db, key, value);
     if (!result.ok) {
       fail(result.error ?? 'could not set value');
       db.close();
@@ -189,7 +202,7 @@ async function settingsCommand(args: string[]): Promise<number> {
 
   const noProbe = args.includes('--no-probe');
   if (!noProbe) {
-    const probe = await probeEndpoint();
+    const probe = await probeEndpoint(db);
     recordEndpointProbe(db, probe);
   }
 
@@ -214,9 +227,17 @@ async function settingsCommand(args: string[]): Promise<number> {
     out(`  endpoint status: ${report.endpointStatus}${report.endpointError ? ` (${report.endpointError})` : ''}`);
     out(`  capture        : ${report.captureEnabled ? 'on' : 'off'} — ${reasonText[report.captureReason] ?? report.captureReason}`);
     out('');
+    out('Analysis model (what the hook really resolves):');
+    out(`  endpoint       : ${report.model.endpoint}${report.model.endpointSource ? ` (source: ${report.model.endpointSource})` : ''}`);
+    out(`  model          : ${report.model.model ?? '(not set)'}${report.model.modelSource ? ` (source: ${report.model.modelSource})` : ''}`);
+    out(`  api key        : ${report.model.apiKeyEnvName ? `read from env ${report.model.apiKeyEnvName}` : report.model.apiKeyEnvNameConfigured ? `env ${report.model.apiKeyEnvNameConfigured} is empty or unset` : 'not configured'}`);
+    out('');
     out('Last analysis result (read-only):');
     if (report.lastAnalysis) {
       out(`  ${report.lastAnalysis.outcome} at ${report.lastAnalysis.at}${report.lastAnalysis.reason ? ` — ${report.lastAnalysis.reason}` : ''}`);
+      if (report.lastAnalysis.outcome === 'failed' && report.lastAnalysis.reason) {
+        out(`  why: ${describeAnalysisFailure(report.lastAnalysis.reason)}`);
+      }
     } else {
       out('  no analysis yet');
     }
@@ -235,12 +256,22 @@ export interface SettingsReport {
   endpointError: string;
   captureEnabled: boolean;
   captureReason: string;
+  /** Effective analysis config, sanitized: no key value, no URL credentials. */
+  model: {
+    endpoint: string;
+    model: string | null;
+    endpointSource: string | null;
+    modelSource: string | null;
+    apiKeyEnvName: string | null;
+    apiKeyEnvNameConfigured: string | null;
+  };
   lastAnalysis: { outcome: string; at: string; reason?: string | null } | null;
 }
 
 export function buildSettingsReport(db: DatabaseType): SettingsReport {
   const settings = allSettings(db);
   const capture = effectiveCaptureEnabled(db);
+  const model = resolveModelConfig(db);
   const preferences: SettingsReport['preferences'] = {};
   for (const key of PREFERENCE_KEYS) {
     preferences[key] = {
@@ -256,13 +287,21 @@ export function buildSettingsReport(db: DatabaseType): SettingsReport {
     endpointError: getSetting(db, 'endpoint_error') ?? '',
     captureEnabled: capture.enabled,
     captureReason: capture.reason,
+    model: {
+      endpoint: sanitizedEndpoint(model.endpoint),
+      model: model.model,
+      endpointSource: model.endpointSource,
+      modelSource: model.modelSource,
+      apiKeyEnvName: model.apiKeyEnvName,
+      apiKeyEnvNameConfigured: model.apiKeyEnvNameConfigured,
+    },
     lastAnalysis: getLastAnalysisResult(db),
   };
 }
 
 async function reviewCommand(): Promise<number> {
   const db = openDatabase();
-  const client = liveClient();
+  const client = liveClient(db);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const closed = { value: false };
   rl.on('close', () => {
@@ -301,7 +340,7 @@ async function analyzeJobCommand(args: string[]): Promise<number> {
     return 1;
   }
   const db = openDatabase();
-  const outcome = await runAnalysis(db, liveClient(), id);
+  const outcome = await runAnalysis(db, liveClient(db), id);
   db.close();
   return outcome.status === 'failed' ? 0 : 0; // analysis failure is never surfaced to the conversation
 }

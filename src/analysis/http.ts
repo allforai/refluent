@@ -7,6 +7,7 @@ import {
 } from '../issue-classes.js';
 import type {
   AnalysisClient,
+  AnalysisFailure,
   AnalyzeRequest,
   GenerateQuestionRequest,
   ReviewQuestionSpec,
@@ -36,10 +37,18 @@ interface ChatChoice {
  * `raw_text` never reaches this class.
  */
 export class HttpAnalysisClient implements AnalysisClient {
+  /** Sanitized cause of the most recent failed call; never carries a payload. */
+  lastFailure: AnalysisFailure | null = null;
+
   constructor(private readonly env: ModelEnv) {}
 
   static fromEnv(env: NodeJS.ProcessEnv = process.env): HttpAnalysisClient | null {
     const config = readModelEnv(env);
+    return config ? new HttpAnalysisClient(config) : null;
+  }
+
+  /** Builds a client from an already-resolved config (environment or stored settings). */
+  static fromConfig(config: ModelEnv | null): HttpAnalysisClient | null {
     return config ? new HttpAnalysisClient(config) : null;
   }
 
@@ -49,7 +58,10 @@ export class HttpAnalysisClient implements AnalysisClient {
 
   async analyze(request: AnalyzeRequest): Promise<AnalysisResult | null> {
     const content = request.filteredText;
-    if (typeof content !== 'string' || content.length === 0) return null;
+    if (typeof content !== 'string' || content.length === 0) {
+      this.lastFailure = 'empty_response';
+      return null;
+    }
     const body = {
       model: this.env.model,
       messages: [
@@ -61,9 +73,16 @@ export class HttpAnalysisClient implements AnalysisClient {
       response_format: { type: 'json_object' },
     };
     const parsed = await this.post(body);
-    if (parsed === null) return null;
-    const validated = validateAnalysisResult(parsed);
-    if (validated === null) return null;
+    if (parsed.value === null) {
+      this.lastFailure = parsed.failure;
+      return null;
+    }
+    const validated = validateAnalysisResult(parsed.value);
+    if (validated === null) {
+      this.lastFailure = 'invalid_response';
+      return null;
+    }
+    this.lastFailure = null;
     return { ...validated, model: this.env.model, model_version: this.env.model };
   }
 
@@ -87,9 +106,16 @@ export class HttpAnalysisClient implements AnalysisClient {
       response_format: { type: 'json_object' },
     };
     const parsed = await this.post(body);
-    if (parsed === null || typeof parsed !== 'object') return null;
-    const obj = parsed as Record<string, unknown>;
-    if (typeof obj.prompt !== 'string' || obj.prompt.length === 0) return null;
+    if (parsed.value === null || typeof parsed.value !== 'object') {
+      this.lastFailure = parsed.value === null ? parsed.failure : 'invalid_response';
+      return null;
+    }
+    const obj = parsed.value as Record<string, unknown>;
+    if (typeof obj.prompt !== 'string' || obj.prompt.length === 0) {
+      this.lastFailure = 'invalid_response';
+      return null;
+    }
+    this.lastFailure = null;
     const type = isValidType(obj.type) ? obj.type : request.type;
     return {
       type,
@@ -116,20 +142,28 @@ export class HttpAnalysisClient implements AnalysisClient {
     }
   }
 
-  private async post(body: unknown): Promise<unknown> {
+  private async post(
+    body: unknown,
+  ): Promise<{ value: unknown; failure: null } | { value: null; failure: AnalysisFailure }> {
     try {
       const response = await this.fetchWithTimeout(`${this.env.endpoint}/chat/completions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       }, ANALYSIS_TIMEOUT_MS);
-      if (!response.ok) return null;
+      if (!response.ok) return { value: null, failure: httpFailure(response.status) };
       const json = (await response.json()) as { choices?: ChatChoice[] };
       const content = json.choices?.[0]?.message?.content;
-      if (typeof content !== 'string' || content.length === 0) return null;
-      return JSON.parse(content) as unknown;
-    } catch {
-      return null;
+      if (typeof content !== 'string' || content.length === 0) {
+        return { value: null, failure: 'empty_response' };
+      }
+      try {
+        return { value: JSON.parse(content) as unknown, failure: null };
+      } catch {
+        return { value: null, failure: 'invalid_response' };
+      }
+    } catch (error) {
+      return { value: null, failure: transportFailure(error) };
     }
   }
 
@@ -148,6 +182,18 @@ export class HttpAnalysisClient implements AnalysisClient {
 
 function isValidType(value: unknown): value is ReviewQuestionType {
   return value === 'zh-to-en' || value === 'rewrite-original' || value === 'fill-in';
+}
+
+/** Statuses a user can act on; anything else keeps its code so 404-vs-500 is visible. */
+function httpFailure(status: number): AnalysisFailure {
+  if (status === 401 || status === 403) return 'auth_rejected';
+  if (status === 429) return 'rate_limited';
+  return `http_error_${status}`;
+}
+
+function transportFailure(error: unknown): AnalysisFailure {
+  if (error instanceof Error && error.name === 'AbortError') return 'timeout';
+  return 'network_error';
 }
 
 async function safeText(response: Response): Promise<string> {

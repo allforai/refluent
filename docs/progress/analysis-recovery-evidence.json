@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-09-23T15:39:29.325Z",
+  "isolated_data_dir": true,
+  "hook_child_env": "REFLUENT_MODEL_ENDPOINT/REFLUENT_MODEL/REFLUENT_MODEL_API_KEY all unset",
+  "hook_stdout_bytes": 0,
+  "job": {
+    "id": 1,
+    "status": "done",
+    "error": null,
+    "latency_ms": 2326
+  },
+  "knowledge_points": [
+    {
+      "kind": "grammar-rule",
+      "canonical_form": "tried",
+      "explanation": "Use the past tense for completed actions.",
+      "rule_key": "tense"
+    }
+  ],
+  "instances": [
+    {
+      "original_text": "Can you help me check this bug? I have already try to fix it."
+    }
+  ],
+  "settings": {
+    "last_analysis_result": "{\"outcome\":\"suggestion_emitted\",\"at\":\"2026-09-23T15:39:27.544Z\",\"reason\":null}",
+    "model": "openai/gpt-4o-mini",
+    "model-api-key-env": "OPENROUTER_API_KEY",
+    "model-endpoint": "https://openrouter.ai/api/v1"
+  },
+  "statusline_output": "refluent: Can you help me check this bug? I have already try to fix it. → Can you help me check this bug? I have already tried to fix it. (语法错误: Incorrect verb tense used.)",
+  "install_log": [
+    "  Only your outgoing messages are captured; agent replies, code and logs are never captured.",
+    "  Saved the analysis endpoint and model locally (https://openrouter.ai/api/v1), so hooks do not depend on your shell profile.",
+    "  Analysis endpoint probe succeeded: ready.",
+    "  No analysis API key is visible here: set `refluent settings set model-api-key-env <ENV_VAR_NAME>` (for example OPENROUTER_API_KEY) so the hook can read the key by name.",
+    "  hook status    : installed_not_loaded",
+    "  endpoint status: ready",
+    "  capture        : enabled",
+    "  next           : send your next message in Claude Code to see the first suggestion."
+  ]
+}

@@ -1,9 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { dataDir, nowIso, readModelEnv } from './config.js';
+import { dataDir, nowIso } from './config.js';
 import type { DatabaseType } from './db.js';
 import { HttpAnalysisClient, type EndpointProbe } from './analysis/http.js';
 import { getSetting, setSetting } from './settings.js';
+import {
+  MODEL_ENDPOINT_KEY,
+  MODEL_KEY,
+  normalizeEndpoint,
+  resolveModelConfig,
+  sanitizedEndpoint,
+  setModelSetting,
+} from './model-config.js';
 
 export interface HookStatus {
   installed: boolean;
@@ -198,12 +206,58 @@ function dataDirWritable(): boolean {
   }
 }
 
-export async function probeEndpoint(env: NodeJS.ProcessEnv = process.env): Promise<EndpointProbe> {
-  const config = readModelEnv(env);
-  if (!config) {
+export async function probeEndpoint(db: DatabaseType, env: NodeJS.ProcessEnv = process.env): Promise<EndpointProbe> {
+  const resolved = resolveModelConfig(db, env);
+  if (!resolved.env) {
     return { status: 'not_configured', error: null, checkedAt: nowIso() };
   }
-  return new HttpAnalysisClient(config).probe();
+  return new HttpAnalysisClient(resolved.env).probe();
+}
+
+/**
+ * The endpoint and model are not secrets, so install copies them out of the
+ * environment into local settings: Claude Code's hooks are children of the
+ * agent and never see a variable that only a terminal profile defines. The API
+ * key is deliberately not stored.
+ */
+function persistEnvModelConfig(db: DatabaseType, env: NodeJS.ProcessEnv, messages: string[]): void {
+  const envEndpoint = normalizeEndpoint(env.REFLUENT_MODEL_ENDPOINT);
+  const envModel = env.REFLUENT_MODEL?.trim();
+  let saved = false;
+  if (envEndpoint && setModelSetting(db, MODEL_ENDPOINT_KEY, envEndpoint).ok) saved = true;
+  if (envModel && setModelSetting(db, MODEL_KEY, envModel).ok) saved = true;
+  if (saved) {
+    const effective = normalizeEndpoint(getSetting(db, MODEL_ENDPOINT_KEY));
+    messages.push(
+      `Saved the analysis endpoint and model locally (${sanitizedEndpoint(effective)}), so hooks do not depend on your shell profile.`,
+    );
+  }
+}
+
+/**
+ * A key that only this shell can see is invisible to the hook. Point at the
+ * variable by name instead of copying the secret into refluent's own state.
+ */
+function describeKeyVisibility(db: DatabaseType, env: NodeJS.ProcessEnv, messages: string[]): void {
+  const resolved = resolveModelConfig(db, env);
+  if (!resolved.env) return;
+  if (!resolved.env.apiKey) {
+    if (resolved.apiKeyEnvNameConfigured) {
+      messages.push(
+        `The variable named by model-api-key-env (${resolved.apiKeyEnvNameConfigured}) is empty or unset in this shell; the hook reads it from the agent's own environment.`,
+      );
+    } else {
+      messages.push(
+        'No analysis API key is visible in this shell: set `refluent settings set model-api-key-env <ENV_VAR_NAME>` (for example OPENROUTER_API_KEY) so the hook can read the key by name.',
+      );
+    }
+    return;
+  }
+  if (resolved.apiKeyEnvName === 'REFLUENT_MODEL_API_KEY') {
+    messages.push(
+      'The API key came from REFLUENT_MODEL_API_KEY, which Claude Code hooks may not inherit: prefer `refluent settings set model-api-key-env <ENV_VAR_NAME>`.',
+    );
+  }
 }
 
 export function recordEndpointProbe(db: DatabaseType, probe: EndpointProbe): void {
@@ -271,7 +325,9 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
   }
   messages.push('Only your outgoing messages are captured; agent replies, code and logs are never captured.');
 
-  const endpoint = await probeEndpoint(endpointEnv);
+  persistEnvModelConfig(db, endpointEnv, messages);
+
+  const endpoint = await probeEndpoint(db, endpointEnv);
   recordEndpointProbe(db, endpoint);
   if (endpoint.status === 'ready') {
     messages.push('Analysis endpoint probe succeeded: ready.');
@@ -282,7 +338,7 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
     messages.push(`Analysis endpoint is unreachable: ${endpoint.error ?? 'unknown error'}`);
     messages.push('Capture stays enabled but no suggestions will be produced until it works.');
   }
-
+  describeKeyVisibility(db, endpointEnv, messages);
   return {
     installed: registered,
     captureEnabled: registered,

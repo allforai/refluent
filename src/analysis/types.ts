@@ -29,12 +29,30 @@ export interface ReviewQuestionSpec {
 }
 
 /**
+ * Sanitized cause of a failed model call. Callers that only need "it did not
+ * work" keep treating a null result as failure; callers that must explain why
+ * read `lastFailure` so the record stays actionable without echoing response
+ * bodies or request payloads.
+ */
+export type AnalysisFailure =
+  | 'not_configured'
+  | 'auth_rejected'
+  | 'rate_limited'
+  | 'timeout'
+  | 'network_error'
+  | 'empty_response'
+  | 'invalid_response'
+  | `http_error_${number}`;
+
+/**
  * The model boundary. Tests inject a deterministic in-process stub so the
  * vitest suite makes no network call.
  */
 export interface AnalysisClient {
   analyze(request: AnalyzeRequest): Promise<AnalysisResult | null>;
   generateQuestion(request: GenerateQuestionRequest): Promise<ReviewQuestionSpec | null>;
+  /** Sanitized reason for the most recent failed call, if any. Never a payload. */
+  readonly lastFailure?: AnalysisFailure | null;
 }
 
 export type { AnalysisResult, KnowledgePointSpec, KnowledgePointKind };

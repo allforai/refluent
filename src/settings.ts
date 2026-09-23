@@ -128,6 +128,36 @@ export function getLastAnalysisResult(db: DatabaseType): LastAnalysisResult | nu
   }
 }
 
+/**
+ * Plain-language explanation of a recorded analysis failure. The stored reason
+ * is already sanitized (no response bodies, no payloads), so this is what turns
+ * "analysis unavailable" into a step the user can take.
+ */
+export function describeAnalysisFailure(reason: string): string {
+  if (reason === 'not_configured') {
+    return 'no analysis model is configured for the hook — run `refluent settings set model-endpoint <url>`, `refluent settings set model <id>`, and `refluent settings set model-api-key-env <ENV_VAR>`';
+  }
+  if (reason === 'auth_rejected') {
+    return 'the endpoint rejected the credentials (HTTP 401/403) — check the key named by model-api-key-env';
+  }
+  if (reason === 'rate_limited') {
+    return 'the endpoint rate-limited the request (HTTP 429) — retry later or use a slower/smaller model';
+  }
+  if (reason === 'timeout') {
+    return 'the endpoint did not answer within 8s — a faster model or a closer endpoint is needed';
+  }
+  if (reason === 'network_error') return 'the endpoint could not be reached — check the URL and network';
+  if (reason === 'empty_response') return 'the endpoint returned an empty message';
+  if (reason === 'invalid_response') {
+    return 'the endpoint replied with something that is not the expected JSON object — the model may not support json_object responses';
+  }
+  const http = /^http_error_(\d{3})$/.exec(reason);
+  if (http) {
+    return `the endpoint replied HTTP ${http[1]} — check the base URL (no /chat/completions), the model id, and billing`;
+  }
+  return 'analysis did not produce a result';
+}
+
 export function hookStatus(db: DatabaseType): 'installed_and_loaded' | 'installed_not_loaded' | 'not_installed' {
   if (getSetting(db, 'hook_installed') !== 'true') return 'not_installed';
   return (getSetting(db, 'hook_seen_at') ?? '') !== '' ? 'installed_and_loaded' : 'installed_not_loaded';

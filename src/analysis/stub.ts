@@ -1,5 +1,6 @@
 import type {
   AnalysisClient,
+  AnalysisFailure,
   AnalyzeRequest,
   GenerateQuestionRequest,
   ReviewQuestionSpec,
@@ -20,6 +21,7 @@ export type QuestionResponder = (request: GenerateQuestionRequest) => ReviewQues
  */
 export class StubAnalysisClient implements AnalysisClient {
   readonly calls: StubCalls = { analyze: [], generateQuestion: [] };
+  lastFailure: AnalysisFailure | null = null;
 
   constructor(
     private readonly analyzeResponder: AnalyzeResponder,
@@ -45,6 +47,9 @@ export function silentStub(): StubAnalysisClient {
 
 /** Used when the analysis endpoint is not configured; every call degrades to null. */
 export class NullAnalysisClient implements AnalysisClient {
+  /** The whole point of this client: say *why* nothing was analyzed. */
+  readonly lastFailure: AnalysisFailure = 'not_configured';
+
   async analyze(): Promise<AnalysisResult | null> {
     return null;
   }

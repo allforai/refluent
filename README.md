@@ -48,17 +48,53 @@ endpoint probe:
   capture        : enabled
 ```
 
-Point it at a model with three environment variables (see your Claude Code settings
-environment or your shell profile):
+Point it at a model. Claude Code runs the hooks as children of the agent, so the
+endpoint and model are stored locally (they are not secrets) — an environment only
+needs to exist for the very first `install`:
 
 ```sh
+# one-time, read by `install` and stored locally
 export REFLUENT_MODEL_ENDPOINT="https://api.example.com/v1"   # base URL, no /chat/completions
 export REFLUENT_MODEL="some-small-model"
-export REFLUENT_MODEL_API_KEY="..."                           # optional
 ```
 
-Restart Claude Code so the hooks pick up the environment. `node bin/refluent settings`
-shows the endpoint status and capture state at any time.
+Or set them directly at any time, without any shell profile:
+
+```sh
+node bin/refluent settings set model-endpoint https://api.example.com/v1
+node bin/refluent settings set model some-small-model
+```
+
+The API key is the one secret and is **never stored**. Name the environment variable
+that already holds it, so the hook reads it by name:
+
+```sh
+node bin/refluent settings set model-api-key-env OPENROUTER_API_KEY   # or any var name
+```
+
+`REFLUENT_MODEL_ENDPOINT`, `REFLUENT_MODEL` and `REFLUENT_MODEL_API_KEY` still work and
+win over the stored values for a single command (for example a one-off `refluent
+review` against another model). After changing what the hooks should use, restart
+Claude Code.
+
+`node bin/refluent settings` is the single place that shows what the hook really
+resolves — endpoint, model, the *name* of the key's variable, and why the last analysis
+failed:
+
+```
+Analysis model (what the hook really resolves):
+  endpoint       : https://api.example.com/v1 (source: local settings)
+  model          : some-small-model (source: local settings)
+  api key        : read from env OPENROUTER_API_KEY
+
+Last analysis result (read-only):
+  failed at 2026-01-01T00:00:00.000Z — not_configured
+  why: no analysis model is configured for the hook — run `refluent settings set model-endpoint <url>` ...
+```
+
+Failure reasons are sanitized (`not_configured`, `auth_rejected`, `rate_limited`,
+`timeout`, `network_error`, `empty_response`, `invalid_response`, `http_error_<status>`)
+and never include response bodies or your text.
 
 ## Use
 
@@ -84,8 +120,11 @@ Switches:
 node bin/refluent settings                          # show switches + real enablement state
 node bin/refluent settings set quiet-mode on        # suppress every terminal output
 node bin/refluent settings set statusline-suggestion off
-node bin/refluent settings reset
+node bin/refluent settings reset                    # switches only; model config is kept
 ```
+
+Model configuration uses the same command with its own keys — `model-endpoint`,
+`model`, `model-api-key-env`; pass `none` to clear one.
 
 ## Data and privacy
 
@@ -144,7 +183,9 @@ remove the data too.
 
 - **Requires your own model endpoint.** With none configured, analysis fails silently by
   design: captured and stored locally with the failure recorded, but no suggestion and no
-  knowledge point are produced.
+  knowledge point are produced. The status line says the analysis was unavailable and
+  `refluent settings` names the sanitized reason, so a missing configuration, a rejected
+  key and a timeout are distinguishable.
 - **Display budget.** The status line is one bounded, single-line, control-sequence-free
   string (worst case 250 characters; original and rewrite capped at 80, the reason at 60).
   Newlines, tabs and ANSI escapes are stripped, anything longer is truncated, and a
