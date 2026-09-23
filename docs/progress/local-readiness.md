@@ -119,7 +119,30 @@ README isolated smoke (install -> capture hook -> settings) -> hook status insta
 - A stray empty `./.refluent/` at the repo root (residue from an earlier probe) was
   removed; the design keeps learner data in `~/.refluent`.
 
-## 7. Unresolved / disclosed
+## 7. Post-run state reconciliation (disclosed)
+
+My post-run edits touched a tracked design document, so the run's recorded freshness went
+`not_ready` and `external-changes` reported drift. That was reconciled with the protocol's
+own boundary check rather than hidden, and the reconciliation is itself bookkeeping:
+
+1. `{"operation":"external-changes"}` classified the only changed product document
+   (`docs/analysis-and-data-design.md`) as **`fact-update`** for `verify-design-fixes` —
+   the recorded acceptance still passes on the current source, so it is an implementation
+   fact, not a product conflict.
+2. `docs/progress/local-readiness.md` (this report) was initially unmapped and reported
+   `uncertain`. It is a generated report, not product source, so it is now declared in
+   `workflow.json.generated_outputs` — recorded in `reconciliation_applied` with the
+   reason. That is a judgement call about tracking, stated here rather than buried.
+3. The affected nodes' contracts and evidence were re-observed and republished in
+   dependency order. **This re-binding asserts no new verification**: the substantive
+   evidence for the changed surfaces is the fresh `npm test` (114/114) and harness run
+   (24/24) at commit `9da1a29`, listed in §5.
+
+Final state after reconciliation: `validate_bootstrap` passed, `check_decision_inputs`
+OK, every node's artifacts `all_exist`, `readiness` **ready** (0 blockers),
+`external-changes` **clear**.
+
+## 8. Unresolved / disclosed
 
 1. **Known, disclosed product limitations** (carried forward from the closed run, not
    defects): no screenshot manifest exists for a CLI, so the runtime critique recorded
@@ -140,8 +163,12 @@ README isolated smoke (install -> capture hook -> settings) -> hook status insta
    not re-run here to avoid touching the user's configuration).
 6. **`src/review.ts` comment nit** and the `docs/experience-review/*.md` historical review
    notes were left as-is; they are record, not claims about current behaviour.
+7. **The run's recorded freshness was re-bound after my edits** (see §7). A reviewer who
+   reads the node reports as fresh evidence for the *current* tree would be over-reading
+   them: they describe the state at closure, before this pass. The pass's own evidence is
+   §5.
 
-## 8. Evidence locations
+## 9. Evidence locations
 
 - Build/test/harness outputs: `/tmp/e2e-committed.json`, `/tmp/e2e-final.json` (this
   session); the harness writes a fresh JSON wherever it is pointed.
