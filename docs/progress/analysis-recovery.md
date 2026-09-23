@@ -130,6 +130,55 @@ endpoint): `docs/progress/analysis-recovery-evidence.json`.
   Orca statusLine is still stored (`settings.wrapped_statusline`) and still runs first;
   `settings.json.refluent-backup` present.
 
+## Coordinator review round (four notes, all processed)
+
+**1. Status.** Root cause confirmed: no model configuration reached the hook child, so
+`NullAnalysisClient` returned `null` without any HTTP call (`latency_ms = 0`); the single
+string `analysis_unavailable` hid that. Configuration was effective in an interactive
+shell and absent in the hook environment.
+
+**2. Provenance of the endpoint/model (explicit, not inferred).**
+`https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY` come from the user's own live
+direction in this session — they stated they already have OpenRouter and rejected using a
+fake endpoint. `openai/gpt-4o-mini` is **my recommendation**, not a user-selected model:
+the user did not name a model and instructed "装" (install) after I proposed that id. The
+endpoint/model were **not** derived from the presence of an unrelated key. No other
+service or model was guessed or acquired.
+
+**3. A non-secret field can no longer store a secret.** `model-endpoint` now rejects a URL
+with embedded username/password or with a query string/fragment, instead of silently
+storing and printing it; a rejected value never reaches stored state. Covered by a new
+test.
+
+**4. Probe diagnostics sanitized.** `probe()` previously recorded up to 200 characters of
+the raw server error body, which `refluent settings` then printed. It now records only
+`HTTP <status>` (or a local connection error, which carries no payload); `safeText` was
+removed. Covered by a new test that feeds a secret-bearing error body.
+
+**5. Key visibility: no inheritance claim.** `model-api-key-env` only selects *which*
+variable the hook looks up — it cannot move a value between environments, and the install
+and README wording now say so explicitly. The selected variable is proven present in the
+environment the hooks inherit: `ps eww` on all five running `claude` processes shows
+`OPENROUTER_API_KEY` present (5/5) and `REFLUENT_MODEL*` absent (0/5). No additional
+environment wiring was needed for this user.
+
+**6. One resolver, structurally.** `analysisClientFor(db, env)` in `src/analysis/http.ts`
+is now the only place a client is built; the hook, `review`/`analyze-job` (via `cli.ts`)
+and the `install` probe all call it. A test asserts the same client for all of them and
+that the install probe reaches the stored endpoint with an empty environment. Environment
+still wins over stored settings.
+
+**7. Cleanup disclosure.** Removal was scoped and transactional, never a snapshot restore:
+`analysis_jobs` row 6 (identified by `message_id = recovery-probe-*`), `instances` row 1
+and `knowledge_points` row 1 (reached through `instance_knowledge_points`), in one
+transaction with `foreign_keys = ON`. Counts before and after are identical
+(`analysis_jobs=5`; `instances`, `knowledge_points`, `instance_knowledge_points`,
+`review_states`, `review_questions`, `review_answers` all `0`). One caveat, disclosed: the
+`settings.last_analysis_result` display field was rewritten back to the value observed
+before the probe (`skipped_filtered/too_short`); if a concurrent hook had written that
+field in the intervening ~1 minute it would have been overwritten. No user text was
+printed at any point during cleanup.
+
 ## Residual risks and limits
 
 - The stored endpoint/model are duplicated in two places by design (environment wins);

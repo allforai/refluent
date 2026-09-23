@@ -10,8 +10,9 @@ import {
   setModelSetting,
   validateModelSetting,
 } from '../src/model-config.js';
-import { HttpAnalysisClient } from '../src/analysis/http.js';
+import { HttpAnalysisClient, analysisClientFor } from '../src/analysis/http.js';
 import { NullAnalysisClient } from '../src/analysis/stub.js';
+import { probeEndpoint } from '../src/install.js';
 import { captureMessage, runAnalysis } from '../src/capture.js';
 import { handleUserPromptSubmit } from '../src/hook.js';
 import { getLastAnalysisResult, setSetting } from '../src/settings.js';
@@ -97,6 +98,20 @@ describe('model config: resolution survives the hook environment', () => {
     expect(resolveModelConfig(db, {}).env).toBeNull();
   });
 
+  it('refuses an endpoint that would store a secret in a non-secret field', () => {
+    const withUserInfo = validateModelSetting(MODEL_ENDPOINT_KEY, 'https://user:secret@example.com/v1');
+    expect(withUserInfo.ok).toBe(false);
+    expect(withUserInfo.error).toContain('username/password');
+
+    const withQuery = validateModelSetting(MODEL_ENDPOINT_KEY, 'https://example.com/v1?api_key=secret');
+    expect(withQuery.ok).toBe(false);
+    expect(withQuery.error).toContain('query string');
+
+    // The rejected values never reach stored state.
+    expect(setModelSetting(db, MODEL_ENDPOINT_KEY, 'https://user:secret@example.com/v1').ok).toBe(false);
+    expect(resolveModelConfig(db, {}).endpoint).toBeNull();
+  });
+
   it('never prints credentials embedded in the endpoint', () => {
     expect(sanitizedEndpoint('https://user:secret@example.com/v1?token=abc')).toBe('https://example.com/v1');
     expect(sanitizedEndpoint(null)).toBe('(not set)');
@@ -147,6 +162,39 @@ describe('model config: failures are distinguishable', () => {
     )));
     await client.analyze(request);
     expect(client.lastFailure).toBe('invalid_response');
+  });
+
+  it('keeps the endpoint probe error free of the server response body', async () => {
+    const client = new HttpAnalysisClient({ endpoint: 'http://127.0.0.1:9/v1', model: 'm', apiKey: 'k' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      'upstream detail that may contain a key: sk-live-abcdefghijklmnop',
+      { status: 500 },
+    )));
+    const probe = await client.probe();
+    expect(probe.status).toBe('unreachable');
+    expect(probe.error).toBe('HTTP 500');
+    expect(probe.error).not.toContain('sk-live');
+  });
+});
+
+describe('model config: one resolver for every entrypoint', () => {
+  it('gives the hook, review/analyze-job and the install probe the same client', async () => {
+    expect(analysisClientFor(db, {})).toBeInstanceOf(NullAnalysisClient);
+    storeModelConfig();
+
+    const client = analysisClientFor(db, {});
+    expect(client).toBeInstanceOf(HttpAnalysisClient);
+    expect((client as HttpAnalysisClient).model).toBe('openai/gpt-4o-mini');
+
+    // install's probe reaches the stored endpoint with an empty environment.
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      seen.push(url);
+      return new Response('{}', { status: 200 });
+    }));
+    const probe = await probeEndpoint(db, {});
+    expect(probe.status).toBe('ready');
+    expect(seen[0]).toBe('https://openrouter.ai/api/v1/models');
   });
 });
 

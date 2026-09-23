@@ -2,8 +2,7 @@ import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { claudeSettingsPath, dataDir, dbPath } from './config.js';
 import { openDatabase, type DatabaseType } from './db.js';
-import { HttpAnalysisClient } from './analysis/http.js';
-import { NullAnalysisClient } from './analysis/stub.js';
+import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
 import { captureMessage, runAnalysis } from './capture.js';
 import { runInstall, runUninstall, probeEndpoint, recordEndpointProbe } from './install.js';
@@ -40,7 +39,7 @@ function resolveBinPath(): string {
 }
 
 function liveClient(db: DatabaseType): AnalysisClient {
-  return HttpAnalysisClient.fromConfig(resolveModelConfig(db).env) ?? new NullAnalysisClient();
+  return analysisClientFor(db);
 }
 
 function out(line = ''): void {

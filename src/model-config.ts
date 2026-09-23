@@ -80,6 +80,14 @@ export function validateModelSetting(key: ModelSettingKey, value: string): Valid
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return { ok: false, error: `invalid value for ${key}: URL must use http or https` };
     }
+    // A base URL needs neither credentials nor a query string. Rejecting them
+    // keeps a value that is stored and printed from silently carrying a secret.
+    if (url.username || url.password) {
+      return { ok: false, error: `invalid value for ${key}: remove the username/password from the URL` };
+    }
+    if (url.search || url.hash) {
+      return { ok: false, error: `invalid value for ${key}: remove the query string or fragment (use the plain base URL)` };
+    }
     if (raw.length > 300) return { ok: false, error: `invalid value for ${key}: too long` };
     return { ok: true, stored: normalizeEndpoint(raw) ?? '' };
   }

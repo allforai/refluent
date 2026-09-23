@@ -66,11 +66,17 @@ node bin/refluent settings set model some-small-model
 ```
 
 The API key is the one secret and is **never stored**. Name the environment variable
-that already holds it, so the hook reads it by name:
+that already holds it, so the hook looks it up by name:
 
 ```sh
 node bin/refluent settings set model-api-key-env OPENROUTER_API_KEY   # or any var name
 ```
+
+Naming a variable does not move a value between environments: the hook reads it from
+the environment **Claude Code passes to its hook commands**, which is the agent's
+environment. A variable that exists only in a separate terminal is not visible there, so
+verify it in the hook's own environment (`refluent install` says which variable it could
+not reach, and `refluent settings` shows which one the hook resolves).
 
 `REFLUENT_MODEL_ENDPOINT`, `REFLUENT_MODEL` and `REFLUENT_MODEL_API_KEY` still work and
 win over the stored values for a single command (for example a one-off `refluent

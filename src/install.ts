@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { dataDir, nowIso } from './config.js';
 import type { DatabaseType } from './db.js';
-import { HttpAnalysisClient, type EndpointProbe } from './analysis/http.js';
+import { HttpAnalysisClient, analysisClientFor, type EndpointProbe } from './analysis/http.js';
 import { getSetting, setSetting } from './settings.js';
 import {
   MODEL_ENDPOINT_KEY,
@@ -207,11 +207,11 @@ function dataDirWritable(): boolean {
 }
 
 export async function probeEndpoint(db: DatabaseType, env: NodeJS.ProcessEnv = process.env): Promise<EndpointProbe> {
-  const resolved = resolveModelConfig(db, env);
-  if (!resolved.env) {
+  const client = analysisClientFor(db, env);
+  if (!(client instanceof HttpAnalysisClient)) {
     return { status: 'not_configured', error: null, checkedAt: nowIso() };
   }
-  return new HttpAnalysisClient(resolved.env).probe();
+  return client.probe();
 }
 
 /**
@@ -235,8 +235,10 @@ function persistEnvModelConfig(db: DatabaseType, env: NodeJS.ProcessEnv, message
 }
 
 /**
- * A key that only this shell can see is invisible to the hook. Point at the
- * variable by name instead of copying the secret into refluent's own state.
+ * A key that only this shell can see is not visible to the hook. Naming a
+ * variable does not move a value between environments: `model-api-key-env`
+ * only chooses *which* variable the hook looks up, so the guidance is to name
+ * one the agent already passes to its hooks.
  */
 function describeKeyVisibility(db: DatabaseType, env: NodeJS.ProcessEnv, messages: string[]): void {
   const resolved = resolveModelConfig(db, env);
@@ -244,18 +246,18 @@ function describeKeyVisibility(db: DatabaseType, env: NodeJS.ProcessEnv, message
   if (!resolved.env.apiKey) {
     if (resolved.apiKeyEnvNameConfigured) {
       messages.push(
-        `The variable named by model-api-key-env (${resolved.apiKeyEnvNameConfigured}) is empty or unset in this shell; the hook reads it from the agent's own environment.`,
+        `model-api-key-env names ${resolved.apiKeyEnvNameConfigured}, which is not set in this shell. Hooks read it from the agent's environment, so confirm it there (this shell proves nothing either way).`,
       );
     } else {
       messages.push(
-        'No analysis API key is visible in this shell: set `refluent settings set model-api-key-env <ENV_VAR_NAME>` (for example OPENROUTER_API_KEY) so the hook can read the key by name.',
+        'No analysis API key is reachable from this shell: name a variable that Claude Code passes to its hooks, e.g. `refluent settings set model-api-key-env OPENROUTER_API_KEY`.',
       );
     }
     return;
   }
   if (resolved.apiKeyEnvName === 'REFLUENT_MODEL_API_KEY') {
     messages.push(
-      'The API key came from REFLUENT_MODEL_API_KEY, which Claude Code hooks may not inherit: prefer `refluent settings set model-api-key-env <ENV_VAR_NAME>`.',
+      'The API key came from REFLUENT_MODEL_API_KEY in this shell only. Hooks inherit the agent\'s environment, not this shell: name a variable the agent already has, e.g. `refluent settings set model-api-key-env OPENROUTER_API_KEY`.',
     );
   }
 }

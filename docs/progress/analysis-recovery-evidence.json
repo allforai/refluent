@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T15:39:29.325Z",
+  "generated_at": "2026-09-23T15:41:54.733Z",
   "isolated_data_dir": true,
   "hook_child_env": "REFLUENT_MODEL_ENDPOINT/REFLUENT_MODEL/REFLUENT_MODEL_API_KEY all unset",
   "hook_stdout_bytes": 0,
@@ -7,7 +7,7 @@
     "id": 1,
     "status": "done",
     "error": null,
-    "latency_ms": 2326
+    "latency_ms": 3423
   },
   "knowledge_points": [
     {
@@ -23,7 +23,7 @@
     }
   ],
   "settings": {
-    "last_analysis_result": "{\"outcome\":\"suggestion_emitted\",\"at\":\"2026-09-23T15:39:27.544Z\",\"reason\":null}",
+    "last_analysis_result": "{\"outcome\":\"suggestion_emitted\",\"at\":\"2026-09-23T15:41:54.024Z\",\"reason\":null}",
     "model": "openai/gpt-4o-mini",
     "model-api-key-env": "OPENROUTER_API_KEY",
     "model-endpoint": "https://openrouter.ai/api/v1"
@@ -33,7 +33,7 @@
     "  Only your outgoing messages are captured; agent replies, code and logs are never captured.",
     "  Saved the analysis endpoint and model locally (https://openrouter.ai/api/v1), so hooks do not depend on your shell profile.",
     "  Analysis endpoint probe succeeded: ready.",
-    "  No analysis API key is visible here: set `refluent settings set model-api-key-env <ENV_VAR_NAME>` (for example OPENROUTER_API_KEY) so the hook can read the key by name.",
+    "  No analysis API key is reachable from this shell: name a variable that Claude Code passes to its hooks, e.g. `refluent settings set model-api-key-env OPENROUTER_API_KEY`.",
     "  hook status    : installed_not_loaded",
     "  endpoint status: ready",
     "  capture        : enabled",

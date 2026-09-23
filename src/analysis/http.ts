@@ -1,4 +1,7 @@
 import { readModelEnv, type ModelEnv } from '../config.js';
+import { resolveModelConfig } from '../model-config.js';
+import type { DatabaseType } from '../db.js';
+import { NullAnalysisClient } from './stub.js';
 import {
   ANALYSIS_SYSTEM_PROMPT,
   QUESTION_SYSTEM_PROMPT,
@@ -16,6 +19,19 @@ import type {
 
 export const ANALYSIS_TIMEOUT_MS = 8000;
 export const PROBE_TIMEOUT_MS = 3000;
+
+/**
+ * The single place every entrypoint builds its model client — the Claude Code
+ * hook, the detached `analyze-job` child, `review` and `install`. They must not
+ * disagree about what is configured, which is exactly how the hook ended up
+ * analyzing nothing while an interactive shell probed "ready".
+ */
+export function analysisClientFor(
+  db: DatabaseType,
+  env: NodeJS.ProcessEnv = process.env,
+): AnalysisClient {
+  return HttpAnalysisClient.fromConfig(resolveModelConfig(db, env).env) ?? new NullAnalysisClient();
+}
 
 export type EndpointStatus = 'ready' | 'not_configured' | 'unreachable';
 
@@ -131,12 +147,9 @@ export class HttpAnalysisClient implements AnalysisClient {
     try {
       const response = await this.fetchWithTimeout(`${this.env.endpoint}/models`, { method: 'GET' }, PROBE_TIMEOUT_MS);
       if (response.ok) return { status: 'ready', error: null, checkedAt };
-      const text = await safeText(response);
-      return {
-        status: 'unreachable',
-        error: `HTTP ${response.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
-        checkedAt,
-      };
+      // The status alone is actionable; the body is never recorded because
+      // `refluent settings` prints this error.
+      return { status: 'unreachable', error: `HTTP ${response.status}`, checkedAt };
     } catch (error) {
       return { status: 'unreachable', error: describeError(error), checkedAt };
     }
@@ -194,14 +207,6 @@ function httpFailure(status: number): AnalysisFailure {
 function transportFailure(error: unknown): AnalysisFailure {
   if (error instanceof Error && error.name === 'AbortError') return 'timeout';
   return 'network_error';
-}
-
-async function safeText(response: Response): Promise<string> {
-  try {
-    return await response.text();
-  } catch {
-    return '';
-  }
 }
 
 function describeError(error: unknown): string {

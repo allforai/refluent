@@ -4,12 +4,10 @@ import { dbPath } from './config.js';
 import { openDatabase, type DatabaseType } from './db.js';
 import { effectiveCaptureEnabled, getSetting, markHookSeen, quietModeOn } from './settings.js';
 import { captureMessage, runAnalysis } from './capture.js';
-import { HttpAnalysisClient } from './analysis/http.js';
-import { NullAnalysisClient } from './analysis/stub.js';
+import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
 import { renderDueNotice } from './review.js';
 import { renderStatusline } from './statusline.js';
-import { resolveModelConfig } from './model-config.js';
 import { wrappedStatusLineCommand } from './install.js';
 
 export type HookName = 'user-prompt-submit' | 'session-start' | 'statusline';
@@ -64,13 +62,13 @@ function parseJson(text: string): Record<string, unknown> {
 }
 
 /**
- * The hook resolves its model from the stored, non-secret config as well as
- * the environment: Claude Code runs hooks as children of the agent, so an
- * environment variable that only exists in a terminal profile never arrives.
+ * The hook resolves its model through the same entrypoint as every other
+ * command: Claude Code runs hooks as children of the agent, so configuration
+ * that exists only in a terminal profile never arrives.
  */
 function analysisClient(deps: HookDeps): AnalysisClient {
   if (deps.client) return deps.client;
-  return HttpAnalysisClient.fromConfig(resolveModelConfig(deps.db).env) ?? new NullAnalysisClient();
+  return analysisClientFor(deps.db);
 }
 
 /**
