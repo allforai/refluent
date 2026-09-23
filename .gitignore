@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+.refluent/
+*.log
+
+# myskills orchestration state for this repo's /run: workflow ledger, node-specs,
+# freshness observations and captured terminal evidence. Kept on disk, not versioned —
+# it holds run transcripts and the local decision journal rather than product source.
+.allforai/
+.pi/
+
+# Python bytecode from the copied orchestrator helpers.
+__pycache__/
+*.pyc
+
+# Editor / OS noise.
+.DS_Store

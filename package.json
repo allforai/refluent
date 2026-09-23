@@ -1,0 +1,33 @@
+{
+  "name": "refluent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn your outgoing coding-agent messages into English phrasing suggestions and durable, locally-owned knowledge points.",
+  "type": "module",
+  "bin": {
+    "refluent": "bin/refluent"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "hooks"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "ts-fsrs": "^5.4.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
