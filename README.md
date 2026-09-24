@@ -102,6 +102,23 @@ Failure reasons are sanitized (`not_configured`, `auth_rejected`, `rate_limited`
 `timeout`, `network_error`, `empty_response`, `invalid_response`, `http_error_<status>`)
 and never include response bodies or your text.
 
+## Floating overlay (macOS)
+
+Instead of a row in every agent pane, suggestions can pop up in one small floating panel
+over whatever app you are in. It never takes keyboard focus, appears only when there is
+a new suggestion, and fades after 12 seconds (hover to keep it, click to see your
+original sentence, drag to move it — the position is remembered).
+
+```sh
+node bin/refluent overlay install     # needs Xcode command line tools (swiftc)
+node bin/refluent overlay test        # show a sample, then drag it into place
+node bin/refluent settings set overlay-duration 20   # 6 | 12 | 20 | 30 | 60 seconds
+node bin/refluent overlay uninstall   # removes it and brings the status line back
+```
+
+Installing turns `statusline-suggestion` off; uninstalling restores its previous value.
+Set it back to `on` if you want both.
+
 ## Agents
 
 Capture and display are separate, because the platforms differ. `--agent` selects the
