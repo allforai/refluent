@@ -117,7 +117,8 @@ node bin/refluent overlay uninstall   # removes it and brings the status line ba
 ```
 
 Installing turns `statusline-suggestion` off; uninstalling restores its previous value.
-Set it back to `on` if you want both.
+Set it back to `on` if you want both. `refluent settings reset` also turns
+`statusline-suggestion` back on, so both surfaces show until you set it off again.
 
 ## Agents
 

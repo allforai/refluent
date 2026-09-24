@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { memoryDb, seedPoint } from './helpers.js';
 import type { DatabaseType } from '../src/db.js';
 import { getSetting } from '../src/settings.js';
-import { POSITION_KEY, applyHelperMessage, nextOverlayMessage, parseHelperLine } from '../src/overlay.js';
-import { CRASH_LOOP_LIMIT, HelperSupervisor, overlayTick, type HelperProcess } from '../src/overlay-runner.js';
+import { POSITION_KEY, STATUS_KEY, applyHelperMessage, nextOverlayMessage, parseHelperLine } from '../src/overlay.js';
+import { CRASH_LOOP_LIMIT, HelperSupervisor, overlayTick, runOverlay, type HelperProcess } from '../src/overlay-runner.js';
 
 class FakeHelper extends EventEmitter {
   stdin = new PassThrough();
@@ -22,12 +22,18 @@ class FakeHelper extends EventEmitter {
   }
 }
 
+interface PendingRestart {
+  fn: () => void;
+  ms: number;
+  cancelled: boolean;
+}
+
 interface Harness {
   supervisor: HelperSupervisor;
   helpers: FakeHelper[];
   lines: string[];
   stopped: string[];
-  pending: Array<{ fn: () => void; ms: number }>;
+  pending: PendingRestart[];
   clock: { t: number };
   spawnThrows: { value: boolean };
 }
@@ -36,7 +42,7 @@ function harness(): Harness {
   const helpers: FakeHelper[] = [];
   const lines: string[] = [];
   const stopped: string[] = [];
-  const pending: Array<{ fn: () => void; ms: number }> = [];
+  const pending: PendingRestart[] = [];
   const clock = { t: 0 };
   const spawnThrows = { value: false };
   const supervisor = new HelperSupervisor({
@@ -49,14 +55,20 @@ function harness(): Harness {
     onLine: (line) => lines.push(line),
     onStopped: (reason) => stopped.push(reason),
     now: () => clock.t,
-    schedule: (fn, ms) => pending.push({ fn, ms }),
+    schedule: (fn, ms) => {
+      const item: PendingRestart = { fn, ms, cancelled: false };
+      pending.push(item);
+      return () => {
+        item.cancelled = true;
+      };
+    },
   });
   return { supervisor, helpers, lines, stopped, pending, clock, spawnThrows };
 }
 
 function runPending(h: Harness): void {
   const due = h.pending.splice(0);
-  for (const item of due) item.fn();
+  for (const item of due) if (!item.cancelled) item.fn();
 }
 
 describe('overlay runner: supervisor', () => {
@@ -146,6 +158,21 @@ describe('overlay runner: supervisor', () => {
     const h = harness();
     expect(() => h.supervisor.send({ type: 'show' })).not.toThrow();
   });
+
+  it('cancels a pending restart timer on shutdown, so it never fires', () => {
+    const h = harness();
+    h.supervisor.start();
+    h.helpers[0]!.emit('exit', 1);
+    expect(h.pending).toHaveLength(1);
+    expect(h.pending[0]!.cancelled).toBe(false);
+    h.supervisor.shutdown();
+    // The bug this guards against: node keeps the process alive for up to `ms` because the
+    // scheduled timer is never cleared, even though the callback becomes a no-op once
+    // `stopped` is set. Cancelling the timer itself is what lets the process exit promptly.
+    expect(h.pending[0]!.cancelled).toBe(true);
+    runPending(h);
+    expect(h.helpers).toHaveLength(1);
+  });
 });
 
 describe('overlay runner: tick', () => {
@@ -179,5 +206,36 @@ describe('overlay runner: tick', () => {
       if (message) applyHelperMessage(db, message);
     }
     expect(JSON.parse(getSetting(db, POSITION_KEY)!)).toEqual({ x: 42, y: 900 });
+  });
+});
+
+describe('overlay runner: run loop', () => {
+  let db: DatabaseType;
+
+  beforeEach(() => {
+    db = memoryDb();
+  });
+
+  afterEach(() => {
+    if (db.open) db.close();
+  });
+
+  it('records status stopped once a clean shutdown finishes, without a real signal or process', async () => {
+    const logs: string[] = [];
+    const handlers: Record<string, () => void> = {};
+    const helper = new FakeHelper();
+    const promise = runOverlay(db, '/unused-binary-path', (line) => logs.push(line), {
+      onSignal: (signal, handler) => {
+        handlers[signal] = handler;
+      },
+      spawnHelper: () => helper as unknown as HelperProcess,
+    });
+    expect(getSetting(db, STATUS_KEY)).toBe('running');
+    expect(handlers.SIGTERM).toBeDefined();
+    handlers.SIGTERM!();
+    const code = await promise;
+    expect(code).toBe(0);
+    expect(getSetting(db, STATUS_KEY)).toBe('stopped');
+    expect(helper.killed).toBe(true);
   });
 });

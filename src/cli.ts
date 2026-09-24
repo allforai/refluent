@@ -419,6 +419,31 @@ export function overlayOptions(): OverlayInstallOptions {
   };
 }
 
+export interface OverlayTestOutcome {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * `overlay test` must only queue a sample for an overlay that is running right now: a
+ * stopped or not-installed overlay would leave the request queued, and it would pop up
+ * — out of context — whenever a runner next starts, possibly days later. The request is
+ * written only in the `ok` branch, so callers never need to remember to check first.
+ */
+export function performOverlayTest(db: DatabaseType, status: OverlayStatus, logPath: string): OverlayTestOutcome {
+  if (status === 'not_installed') {
+    return { ok: false, message: 'the overlay is not installed; run `refluent overlay install` first.' };
+  }
+  if (status === 'stopped') {
+    return {
+      ok: false,
+      message: `the overlay is installed but not running; see ${logPath}, or run \`refluent overlay install\` again to restart it.`,
+    };
+  }
+  requestTestOverlay(db);
+  return { ok: true, message: 'Sent a sample suggestion to the overlay.' };
+}
+
 async function overlayCommand(args: string[]): Promise<number> {
   const sub = args[0];
   const db = openDatabase();
@@ -436,13 +461,13 @@ async function overlayCommand(args: string[]): Promise<number> {
       return await runOverlay(db, paths.binary, (line) => fs.appendFileSync(paths.log, `${line}\n`));
     }
     if (sub === 'test') {
-      requestTestOverlay(db);
       const status = buildSettingsReport(db).overlay;
-      if (status === 'running') {
-        out('Sent a sample suggestion to the overlay.');
+      const outcome = performOverlayTest(db, status, defaultOverlayPaths().log);
+      if (outcome.ok) {
+        out(outcome.message);
         return 0;
       }
-      fail(`the overlay is ${status}; run \`refluent overlay install\` first.`);
+      fail(outcome.message);
       return 1;
     }
     fail('usage: refluent overlay <install|uninstall|run|test>');

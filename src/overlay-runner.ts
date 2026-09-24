@@ -25,7 +25,8 @@ export interface SupervisorOptions {
   onLine: (line: string) => void;
   onStopped: (reason: string) => void;
   now?: () => number;
-  schedule?: (fn: () => void, ms: number) => void;
+  /** Returns a canceller, so a restart scheduled during backoff can be cancelled on shutdown. */
+  schedule?: (fn: () => void, ms: number) => () => void;
 }
 
 /**
@@ -36,6 +37,7 @@ export class HelperSupervisor {
   private child: HelperProcess | null = null;
   private exits: number[] = [];
   private stopped = false;
+  private cancelPendingRestart: (() => void) | null = null;
 
   constructor(private readonly options: SupervisorOptions) {}
 
@@ -53,6 +55,8 @@ export class HelperSupervisor {
 
   shutdown(): void {
     this.stopped = true;
+    this.cancelPendingRestart?.();
+    this.cancelPendingRestart = null;
     this.child?.kill();
     this.child = null;
   }
@@ -89,8 +93,14 @@ export class HelperSupervisor {
       return;
     }
     const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (this.exits.length - 1));
-    const schedule = this.options.schedule ?? ((fn, ms) => void setTimeout(fn, ms));
-    schedule(() => {
+    const schedule =
+      this.options.schedule ??
+      ((fn, ms) => {
+        const timer = setTimeout(fn, ms);
+        return () => clearTimeout(timer);
+      });
+    this.cancelPendingRestart = schedule(() => {
+      this.cancelPendingRestart = null;
       if (!this.stopped) this.launch();
     }, delay);
   }
@@ -121,8 +131,20 @@ function safeSet(db: DatabaseType, key: string, value: string): void {
   }
 }
 
+export interface RunOverlayDeps {
+  /** Registers a one-shot signal handler; overridable so tests never touch real process signals. */
+  onSignal?: (signal: 'SIGTERM' | 'SIGINT', handler: () => void) => void;
+  /** Overridable so tests never spawn a real child process. */
+  spawnHelper?: () => HelperProcess;
+}
+
 /** The long-lived process behind the LaunchAgent. Resolves 0 on SIGTERM or crash loop. */
-export function runOverlay(db: DatabaseType, binaryPath: string, log: (line: string) => void): Promise<number> {
+export function runOverlay(
+  db: DatabaseType,
+  binaryPath: string,
+  log: (line: string) => void,
+  deps: RunOverlayDeps = {},
+): Promise<number> {
   return new Promise((resolve) => {
     let lastBeat = 0;
     const beat = () => {
@@ -130,7 +152,7 @@ export function runOverlay(db: DatabaseType, binaryPath: string, log: (line: str
       safeSet(db, HEARTBEAT_KEY, nowIso());
     };
     const supervisor = new HelperSupervisor({
-      spawnHelper: () => spawnHelperProcess(binaryPath),
+      spawnHelper: deps.spawnHelper ?? (() => spawnHelperProcess(binaryPath)),
       onLine: (line) => {
         const message = parseHelperLine(line);
         if (!message) return;
@@ -153,10 +175,15 @@ export function runOverlay(db: DatabaseType, binaryPath: string, log: (line: str
     const finish = () => {
       clearInterval(timer);
       supervisor.shutdown();
+      // The crash-loop path (onStopped, above) already recorded this and logged why; a clean
+      // shutdown (SIGTERM/SIGINT) never did, so `settings show` kept reading `running` for up
+      // to HEARTBEAT_STALE_MS after the process was gone.
+      safeSet(db, STATUS_KEY, 'stopped');
       resolve(0);
     };
-    process.once('SIGTERM', finish);
-    process.once('SIGINT', finish);
+    const onSignal = deps.onSignal ?? ((signal, handler) => process.once(signal, handler));
+    onSignal('SIGTERM', finish);
+    onSignal('SIGINT', finish);
     safeSet(db, STATUS_KEY, 'running');
     beat();
     supervisor.start();
