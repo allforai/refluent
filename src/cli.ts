@@ -1,7 +1,17 @@
+import fs from 'node:fs';
 import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { claudeSettingsPath, codexHooksPath, dataDir, dbPath, piExtensionsDir } from './config.js';
 import { openDatabase, type DatabaseType } from './db.js';
+import { overlayStatus, requestTestOverlay, type OverlayStatus } from './overlay.js';
+import { runOverlay } from './overlay-runner.js';
+import {
+  defaultOverlayPaths,
+  installOverlay,
+  runCommand,
+  uninstallOverlay,
+  type OverlayInstallOptions,
+} from './overlay-install.js';
 import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
 import { captureMessage, runAnalysis } from './capture.js';
@@ -114,6 +124,8 @@ export async function main(argv: string[]): Promise<number> {
       return hookCommand(rest);
     case 'analyze-job':
       return analyzeJobCommand(rest);
+    case 'overlay':
+      return overlayCommand(rest);
     default:
       fail(`unknown command: ${command}`);
       printHelp();
@@ -128,12 +140,15 @@ function printHelp(): void {
   out('  refluent install [--yes|--no]      authorize hooks and check the analysis endpoint');
   out('  refluent install --agent <id>       target claude-code (default), codex or pi');
   out('  refluent uninstall [--agent <id>]   remove the hooks (or the Pi extension)');
+  out('  refluent overlay install|uninstall  floating macOS panel instead of the terminal status line');
+  out('  refluent overlay test               pop up a sample suggestion (drag it to place it)');
   out('  refluent settings [show]           show switches and real enablement state');
   out('  refluent settings set <key> <val>  change a switch');
   out('  refluent settings set model-endpoint <url>   analysis base URL, stored locally');
   out('  refluent settings set model <id>             analysis model id, stored locally');
   out('  refluent settings set model-api-key-env <VAR> read the API key from this env var');
   out('  refluent settings set statusline-original off  drop your own sentence from the status line');
+  out('  refluent settings set overlay-duration 20      seconds the overlay stays (6|12|20|30|60)');
   out('  refluent settings reset            restore defaults');
   out('  refluent review                    answer due production questions');
   out('  refluent hook <name> [--agent <id>] hook entrypoint (user-prompt-submit|session-start|statusline)');
@@ -189,6 +204,7 @@ async function installCommand(args: string[]): Promise<number> {
   out(`  hook status    : ${report.hookStatus.installed ? (report.hookStatus.loaded ? 'installed_and_loaded' : 'installed_not_loaded') : 'not_installed'}`);
   out(`  endpoint status: ${report.endpoint.status}`);
   out(`  capture        : ${report.captureEnabled ? 'enabled' : 'not enabled'}`);
+  out(`  overlay        : ${buildSettingsReport(db).overlay}`);
   if (report.installed && report.endpoint.status === 'ready') {
     out(
       definition.hasInjectableStatusline
@@ -263,6 +279,7 @@ async function settingsCommand(args: string[]): Promise<number> {
     out(`  hook status    : ${report.hookStatus}`);
     out(`  endpoint status: ${report.endpointStatus}${report.endpointError ? ` (${report.endpointError})` : ''}`);
     out(`  capture        : ${report.captureEnabled ? 'on' : 'off'} — ${reasonText[report.captureReason] ?? report.captureReason}`);
+    out(`  overlay        : ${report.overlay}`);
     out('');
     out('Analysis model (what the hook really resolves):');
     out(`  endpoint       : ${report.model.endpoint}${report.model.endpointSource ? ` (source: ${report.model.endpointSource})` : ''}`);
@@ -304,9 +321,13 @@ export interface SettingsReport {
     apiKeyEnvNameConfigured: string | null;
   };
   lastAnalysis: { outcome: string; at: string; reason?: string | null } | null;
+  overlay: OverlayStatus;
 }
 
-export function buildSettingsReport(db: DatabaseType): SettingsReport {
+export function buildSettingsReport(
+  db: DatabaseType,
+  options: { overlayInstalled?: boolean } = {},
+): SettingsReport {
   const settings = allSettings(db);
   const capture = effectiveCaptureEnabled(db);
   const model = resolveModelConfig(db);
@@ -334,6 +355,7 @@ export function buildSettingsReport(db: DatabaseType): SettingsReport {
       apiKeyEnvNameConfigured: model.apiKeyEnvNameConfigured,
     },
     lastAnalysis: getLastAnalysisResult(db),
+    overlay: overlayStatus(db, options.overlayInstalled ?? fs.existsSync(defaultOverlayPaths().plist)),
   };
 }
 
@@ -383,6 +405,51 @@ async function analyzeJobCommand(args: string[]): Promise<number> {
   const outcome = await runAnalysis(db, liveClient(db), id, agentSource(agent));
   db.close();
   return outcome.status === 'failed' ? 0 : 0; // analysis failure is never surfaced to the conversation
+}
+
+export function overlayOptions(): OverlayInstallOptions {
+  const override = process.env.REFLUENT_DATA_DIR?.trim();
+  return {
+    paths: defaultOverlayPaths(),
+    run: runCommand,
+    nodePath: process.execPath,
+    binPath: resolveBinPath(),
+    uid: process.getuid?.() ?? 0,
+    dataDirOverride: override && override.length > 0 ? override : null,
+  };
+}
+
+async function overlayCommand(args: string[]): Promise<number> {
+  const sub = args[0];
+  const db = openDatabase();
+  try {
+    if (sub === 'install' || sub === 'uninstall') {
+      const result = sub === 'install' ? installOverlay(db, overlayOptions()) : uninstallOverlay(db, overlayOptions());
+      for (const line of result.messages) {
+        if (result.ok) out(`  ${line}`);
+        else fail(line);
+      }
+      return result.ok ? 0 : 1;
+    }
+    if (sub === 'run') {
+      const paths = defaultOverlayPaths();
+      return await runOverlay(db, paths.binary, (line) => fs.appendFileSync(paths.log, `${line}\n`));
+    }
+    if (sub === 'test') {
+      requestTestOverlay(db);
+      const status = buildSettingsReport(db).overlay;
+      if (status === 'running') {
+        out('Sent a sample suggestion to the overlay.');
+        return 0;
+      }
+      fail(`the overlay is ${status}; run \`refluent overlay install\` first.`);
+      return 1;
+    }
+    fail('usage: refluent overlay <install|uninstall|run|test>');
+    return 1;
+  } finally {
+    db.close();
+  }
 }
 
 export { captureMessage };

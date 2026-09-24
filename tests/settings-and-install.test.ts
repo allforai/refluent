@@ -21,6 +21,7 @@ import {
   writeHookConfig,
 } from '../src/install.js';
 import { buildSettingsReport } from '../src/cli.js';
+import { HEARTBEAT_KEY, STATUS_KEY } from '../src/overlay.js';
 
 let db: DatabaseType;
 let tmpDir: string;
@@ -203,5 +204,26 @@ describe('install: authorization, hook file and loaded state', () => {
 
     fs.writeFileSync(settingsPath, JSON.stringify({ hooks: {} }), 'utf8');
     expect(verifyHookConfig(settingsPath)).toBe(false);
+  });
+});
+
+describe('settings report: overlay', () => {
+  it('reports not_installed when there is no LaunchAgent', () => {
+    const report = buildSettingsReport(db, { overlayInstalled: false });
+    expect(report.overlay).toBe('not_installed');
+  });
+
+  it('reports running from a fresh heartbeat', () => {
+    setSetting(db, STATUS_KEY, 'running');
+    setSetting(db, HEARTBEAT_KEY, new Date().toISOString());
+    expect(buildSettingsReport(db, { overlayInstalled: true }).overlay).toBe('running');
+  });
+
+  it('lists overlay-duration among the switches', () => {
+    expect(buildSettingsReport(db, { overlayInstalled: false }).preferences['overlay-duration']).toEqual({
+      value: '12',
+      default: '12',
+      allowed: ['6', '12', '20', '30', '60'],
+    });
   });
 });
