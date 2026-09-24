@@ -10,7 +10,8 @@
   "files": [
     "bin",
     "dist",
-    "hooks"
+    "hooks",
+    "overlay"
   ],
   "engines": {
     "node": ">=22"
