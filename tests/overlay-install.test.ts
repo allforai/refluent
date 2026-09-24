@@ -20,11 +20,27 @@ let db: DatabaseType;
 let tmp: string;
 let calls: string[];
 let failing: Set<string>;
+/** How many more `launchctl print` calls report the old agent as still loaded. */
+let stillLoaded: number;
+/** How many more `launchctl bootstrap` calls fail with launchd's teardown race. */
+let bootstrapRaces: number;
+let slept: number[];
 
 const fakeRun: CommandRunner = (command, args) => {
   const line = [command, ...args].join(' ');
   calls.push(line);
   for (const prefix of failing) if (line.startsWith(prefix)) return { status: 1, output: `${prefix} failed` };
+  if (command === 'launchctl' && args[0] === 'print') {
+    if (stillLoaded > 0) {
+      stillLoaded -= 1;
+      return { status: 0, output: 'state = running' };
+    }
+    return { status: 113, output: 'Could not find service' };
+  }
+  if (command === 'launchctl' && args[0] === 'bootstrap' && bootstrapRaces > 0) {
+    bootstrapRaces -= 1;
+    return { status: 5, output: 'Bootstrap failed: 5: Input/output error' };
+  }
   if (command === 'xcrun' && args[0] === 'swiftc') fs.writeFileSync(args[args.indexOf('-o') + 1]!, 'binary');
   return { status: 0, output: '' };
 };
@@ -43,6 +59,7 @@ function options(): OverlayInstallOptions {
     uid: 501,
     dataDirOverride: null,
     platform: 'darwin',
+    sleep: (ms) => slept.push(ms),
   };
 }
 
@@ -51,6 +68,9 @@ beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'refluent-overlay-install-'));
   calls = [];
   failing = new Set();
+  stillLoaded = 0;
+  bootstrapRaces = 0;
+  slept = [];
 });
 
 afterEach(() => {
@@ -91,6 +111,32 @@ describe('overlay install', () => {
     failing.add('launchctl bootstrap');
     const result = installOverlay(db, options());
     expect(result.ok).toBe(false);
+    expect(getSetting(db, 'statusline-suggestion')).toBe('on');
+  });
+
+  it('waits for the old agent to be torn down before starting the new one', () => {
+    stillLoaded = 3;
+    const result = installOverlay(db, options());
+    expect(result.ok).toBe(true);
+    const bootstrapAt = calls.findIndex((c) => c.startsWith('launchctl bootstrap'));
+    const prints = calls.slice(0, bootstrapAt).filter((c) => c === `launchctl print gui/501/${OVERLAY_LABEL}`);
+    expect(prints).toHaveLength(4);
+    expect(slept.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('retries a bootstrap that lost the teardown race', () => {
+    bootstrapRaces = 1;
+    const result = installOverlay(db, options());
+    expect(result.ok).toBe(true);
+    expect(calls.filter((c) => c.startsWith('launchctl bootstrap'))).toHaveLength(2);
+    expect(getSetting(db, 'statusline-suggestion')).toBe('off');
+  });
+
+  it('gives up after the retry and leaves the terminal line alone', () => {
+    bootstrapRaces = 5;
+    const result = installOverlay(db, options());
+    expect(result.ok).toBe(false);
+    expect(calls.filter((c) => c.startsWith('launchctl bootstrap'))).toHaveLength(2);
     expect(getSetting(db, 'statusline-suggestion')).toBe('on');
   });
 

@@ -46,6 +46,8 @@ export interface OverlayInstallOptions {
   uid: number;
   dataDirOverride: string | null;
   platform?: NodeJS.Platform;
+  /** Blocking pause between launchctl polls; a test passes a recorder. */
+  sleep?: (ms: number) => void;
 }
 
 export interface OverlayInstallResult {
@@ -102,6 +104,36 @@ export function buildPlist(options: {
 `;
 }
 
+/** launchd tears a booted-out job down asynchronously; allow it up to 5 s. */
+const TEARDOWN_POLL_MS = 250;
+const TEARDOWN_POLLS = 20;
+const BOOTSTRAP_RETRY_MS = 1000;
+
+function blockingSleep(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Stops any running agent and starts the one in the plist. A bootstrap issued while the
+ * old job is still being torn down fails with "Bootstrap failed: 5: Input/output error",
+ * so wait until launchd no longer knows the label, and retry the bootstrap once.
+ */
+function restartAgent(options: OverlayInstallOptions): { status: number; output: string } {
+  const { run } = options;
+  const sleep = options.sleep ?? blockingSleep;
+  const target = `gui/${options.uid}/${OVERLAY_LABEL}`;
+  // A first install has nothing to stop.
+  run('launchctl', ['bootout', target]);
+  for (let poll = 0; poll < TEARDOWN_POLLS && run('launchctl', ['print', target]).status === 0; poll += 1) {
+    sleep(TEARDOWN_POLL_MS);
+  }
+  const bootstrap = () => run('launchctl', ['bootstrap', `gui/${options.uid}`, options.paths.plist]);
+  const first = bootstrap();
+  if (first.status === 0) return first;
+  sleep(BOOTSTRAP_RETRY_MS);
+  return bootstrap();
+}
+
 export function installOverlay(db: DatabaseType, options: OverlayInstallOptions): OverlayInstallResult {
   if ((options.platform ?? process.platform) !== 'darwin') {
     return { ok: false, messages: ['The overlay is macOS only. Nothing was changed.'] };
@@ -132,9 +164,7 @@ export function installOverlay(db: DatabaseType, options: OverlayInstallOptions)
     }),
     'utf8',
   );
-  // A reinstall replaces the running agent; the first install has nothing to stop.
-  run('launchctl', ['bootout', `gui/${options.uid}/${OVERLAY_LABEL}`]);
-  const boot = run('launchctl', ['bootstrap', `gui/${options.uid}`, paths.plist]);
+  const boot = restartAgent(options);
   if (boot.status !== 0) {
     return {
       ok: false,
