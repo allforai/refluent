@@ -177,6 +177,23 @@ describe('filter: skip reasons', () => {
     expect(filterNaturalLanguage('1234 5678 9012 3456').skipReason).toBe('low_natural_language');
   });
 
+  it('G5 admits Chinese content so it can be translated into English', () => {
+    const pure = filterNaturalLanguage('帮我看看这个登录失败的问题');
+    expect(pure.skipReason).toBeNull();
+    expect(pure.filteredText).toBe('帮我看看这个登录失败的问题');
+
+    // Mostly Chinese with one borrowed English word is translation material too.
+    const borrowed = filterNaturalLanguage('我觉得这个 function 有问题，帮我看看');
+    expect(borrowed.skipReason).toBeNull();
+    expect(borrowed.filteredText).toBe('我觉得这个 function 有问题，帮我看看');
+  });
+
+  it('G5 no_coachable_text when there is neither English prose nor Chinese content', () => {
+    expect(filterNaturalLanguage('ok').skipReason).toBe('too_short');
+    // A long message in a third script is not English practice and not Chinese material.
+    expect(filterNaturalLanguage('привет как дела у тебя сегодня').skipReason).toBe('no_coachable_text');
+  });
+
   it('returns a normalized filtered text for ordinary prose', () => {
     const result = filterNaturalLanguage('  I   think   we should   split this file.  ');
     expect(result.skipReason).toBeNull();
@@ -185,6 +202,6 @@ describe('filter: skip reasons', () => {
   });
 
   it('exposes a stable filter version', () => {
-    expect(FILTER_VERSION).toBe('filter-v2');
+    expect(FILTER_VERSION).toBe('filter-v3');
   });
 });

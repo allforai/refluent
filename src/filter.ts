@@ -9,7 +9,7 @@
 
 import { isBareShellCommand, isCodeToken, redactLine } from './redact.js';
 
-export const FILTER_VERSION = 'filter-v2';
+export const FILTER_VERSION = 'filter-v3';
 export const MAX_FILTERED_LENGTH = 1500;
 
 export type SkipReason =
@@ -17,7 +17,7 @@ export type SkipReason =
   | 'too_short'
   | 'telegraphic_command'
   | 'low_natural_language'
-  | 'no_english';
+  | 'no_coachable_text';
 
 export interface FilterResult {
   filteredText: string | null;
@@ -132,8 +132,22 @@ function capLength(text: string, redactions: string[]): string {
 const CJK_RE = /[㐀-䶿一-鿿豈-﫿]/g;
 const LATIN_WORD_RE = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
 
+/** Fewer Latin words than this and the message is not English prose to coach. */
+const MIN_LATIN_WORDS = 2;
+/**
+ * ...but Chinese content is still material: it is translated into English rather than
+ * dropped. Below this many ideographs a message carries no sentence to translate, and a
+ * message with neither enough English nor enough Chinese is `no_coachable_text`.
+ */
+const MIN_CJK_CHARACTERS = 4;
+
 function latinWordCount(text: string): number {
   return (text.match(LATIN_WORD_RE) ?? []).length;
+}
+
+/** CJK ideographs in the text, the unit the filter uses to recognise Chinese content. */
+export function cjkCount(text: string): number {
+  return (text.match(CJK_RE) ?? []).length;
 }
 
 /**
@@ -253,8 +267,8 @@ export function filterNaturalLanguage(rawText: string): FilterResult {
   if (isLowNaturalLanguage(normalized)) {
     return { filteredText: null, skipReason: 'low_natural_language', redactions: unique(redactions) };
   }
-  if (latinWordCount(normalized) < 2) {
-    return { filteredText: null, skipReason: 'no_english', redactions: unique(redactions) };
+  if (latinWordCount(normalized) < MIN_LATIN_WORDS && cjkCount(normalized) < MIN_CJK_CHARACTERS) {
+    return { filteredText: null, skipReason: 'no_coachable_text', redactions: unique(redactions) };
   }
   return { filteredText: normalized, skipReason: null, redactions: unique(redactions) };
 }

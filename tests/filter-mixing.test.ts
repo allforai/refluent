@@ -13,8 +13,10 @@ describe('filter v2: Chinese-English mixing', () => {
     expect(result.filteredText).toBe('帮我look一下this bug');
   });
 
-  it('skips a Chinese message that only borrows one English term', () => {
-    expect(filterNaturalLanguage('我觉得这个 function 有问题，帮我看看').skipReason).toBe('no_english');
+  it('admits a Chinese message that only borrows one English term, for translation', () => {
+    const result = filterNaturalLanguage('我觉得这个 function 有问题，帮我看看');
+    expect(result.skipReason).toBeNull();
+    expect(result.filteredText).toBe('我觉得这个 function 有问题，帮我看看');
   });
 
   it('keeps the numeric-only message as low_natural_language', () => {

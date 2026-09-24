@@ -139,6 +139,9 @@ Nothing to remember during a conversation:
 
 - **Every message you send** is captured and filtered. Code, logs, stack traces, bare
   commands and short imperatives are dropped before anything reaches the model.
+- **A message written in Chinese is translated into English.** The suggestion is its
+  idiomatic English sentence, and the expression it reuses becomes a knowledge point, so
+  it can come back in review as a Chinese→English question.
 - **The status line** shows at most one suggestion:
   `refluent: <your sentence> → <better phrasing> (<why>)`. Your own wrapped status line is
   printed first and refluent's line is appended below it; a suggestion expires after

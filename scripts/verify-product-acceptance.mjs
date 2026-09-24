@@ -111,6 +111,26 @@ const FORBIDDEN_TOKENS = [
 ];
 
 function analysisResponse(text) {
+  if (text.includes('登录')) {
+    // A Chinese-only message: the suggestion is the English translation.
+    return {
+      issue: {
+        class: 'chinese_translation',
+        severity: 'medium',
+        span: '帮我看看这个登录 bug 为什么一直失败',
+        explanation: 'the message is Chinese',
+      },
+      rewrite: 'Can you help me look into why this login bug keeps failing?',
+      reason: 'Translated from Chinese.',
+      knowledge_point: {
+        kind: 'expression-unit',
+        canonical_form: 'look into why',
+        explanation: 'investigate the cause of something.',
+        rule_key: null,
+      },
+      recurrence_of_kp_id: null,
+    };
+  }
   if (text.includes('看看') || text.includes('修复')) {
     return {
       // Two issues: the validator must keep exactly one (highest priority).
@@ -837,6 +857,47 @@ async function main() {
       ? 'passed'
       : 'failed',
     JSON.stringify(codexHooksFile),
+  );
+
+  // --- A message written in Chinese becomes an English translation ------------
+  // The filter used to drop non-English messages; Chinese content is now material and the
+  // suggestion is its English translation, with the reused expression stored as a point.
+  const zhDir = mkTemp('zh');
+  const zhServer = await startFakeServer({ mode: 'normal' });
+  const zhEnv = {
+    ...env,
+    REFLUENT_DATA_DIR: dataDirFor(zhDir),
+    REFLUENT_MODEL_ENDPOINT: zhServer.endpoint,
+  };
+  const zhInstall = await run(['install', '--yes'], { env: zhEnv });
+  const zhMessage = '帮我看看这个登录 bug 为什么一直失败';
+  const zhSent = await run(['hook', 'user-prompt-submit'], { env: zhEnv, input: promptInput(zhMessage, 'msg-zh') });
+  const zhDb = openDb(path.join(dataDirFor(zhDir), 'analysis-and-data.sqlite'));
+  const zhJob = zhDb
+    .prepare("SELECT status, skip_reason, filtered_text FROM analysis_jobs WHERE message_id='msg-zh'")
+    .get();
+  const zhLine = (await run(['hook', 'statusline'], { env: zhEnv })).stdout.trimEnd();
+  const zhKp = zhDb
+    .prepare('SELECT kind, canonical_form FROM knowledge_points ORDER BY id DESC LIMIT 1')
+    .get();
+  zhDb.close();
+  await zhServer.close();
+  record(
+    'chinese-message-becomes-english',
+    'node bin/refluent hook user-prompt-submit with a Chinese-only prompt, then hook statusline',
+    zhSent.code,
+    `install exit=${zhInstall.code}; job status=${zhJob?.status}; skip_reason=${zhJob?.skip_reason}; filtered="${zhJob?.filtered_text}"; statusline="${zhLine}"; kp=${zhKp?.kind}/${zhKp?.canonical_form}`,
+    zhInstall.code === 0 &&
+    zhSent.code === 0 &&
+    zhJob?.status === 'done' &&
+    zhJob?.skip_reason === null &&
+    zhLine.includes('中文→英文') &&
+    /[A-Za-z]{3}/.test(zhLine) &&
+    zhKp?.kind === 'expression-unit' &&
+    typeof zhKp?.canonical_form === 'string'
+      ? 'passed'
+      : 'failed',
+    `${zhLine}\n${JSON.stringify(zhKp)}`,
   );
 
   // --- Uninstall hands the user's own settings file back untouched -----------

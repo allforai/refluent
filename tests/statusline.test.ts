@@ -258,6 +258,26 @@ describe('statusline: the original yields where the pane is shared', () => {
     expect(showOriginalFor(db, 'codex')).toBe(true);
   });
 
+  it('shows a translation as the rewrite plus its label, keeping the redundant reason out', () => {
+    seedPoint(db, {
+      canonicalForm: 'look into why',
+      issueClass: 'chinese_translation',
+      originalText: '帮我看看这个登录 bug 为什么一直失败',
+      rewrite: 'Can you help me look into why this login bug keeps failing?',
+      reason: 'This is a translation.',
+    });
+
+    const cc = renderStatusline(db, new Date(), { agent: 'claude-code', maxColumns: 200 });
+    expect(cc).toBe(
+      'refluent: 帮我看看这个登录 bug 为什么一直失败 → Can you help me look into why this login bug keeps failing? (中文→英文)',
+    );
+
+    // The shared Pi footer has no room for a reason on top of the translation.
+    const pi = renderStatusline(db, new Date(), { agent: 'pi', maxColumns: 100 });
+    expect(pi).toBe('refluent: Can you help me look into why this login bug keeps failing? (中文→英文)');
+    expect(displayWidth(pi)).toBeLessThanOrEqual(PI_STATUSLINE_BUDGET);
+  });
+
   it('drops the original for Pi through the hook, even on a wide pane', async () => {
     seedSuggestion();
     const result = await handleStatusline('{}', { db, terminalColumns: 200, agent: 'pi' });

@@ -199,7 +199,12 @@ function renderSuggestion(
 ): string {
   const original = truncate(suggestion.original, MAX_ORIGINAL_CHARS);
   const rewrite = truncate(suggestion.rewrite, MAX_REWRITE_CHARS);
-  const reason = truncate(suggestion.reason, MAX_REASON_CHARS);
+  // A translation's reason is redundant with the issue-class label and would push the
+  // translation itself off a shared or narrow line, so the rewrite keeps those columns.
+  const reason =
+    suggestion.issueClass === 'chinese_translation'
+      ? ''
+      : truncate(suggestion.reason, MAX_REASON_CHARS);
   const label = isIssueClass(suggestion.issueClass) ? issueClassLabel(suggestion.issueClass) : 'issue';
   const why = reason.length > 0 ? `${label}: ${reason}` : label;
   const withReason = reason.length > 0 ? reason : label;

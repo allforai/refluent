@@ -1,13 +1,15 @@
 /**
- * The four issue classes, their value ranking and the analyst result contract.
+ * The issue classes, their value ranking and the analyst result contract.
  *
  * An analyzed message yields at most one suggestion, so the classifier keeps
- * the single highest-priority issue. Telegraphic agent-command style is
+ * the single highest-priority issue. A message written in Chinese is translated
+ * into English (`chinese_translation`); telegraphic agent-command style is
  * tolerated ellipsis, not an error.
  */
 
 export type IssueClass =
   | 'chinese_code_mixing'
+  | 'chinese_translation'
   | 'grammar_error'
   | 'chinglish_collocation'
   | 'register_tone';
@@ -56,6 +58,9 @@ export const ISSUE_CLASSES: readonly IssueClassInfo[] = [
   { id: 'grammar_error', label_zh: '语法错误', priority: 2 },
   { id: 'chinglish_collocation', label_zh: 'Chinglish 搭配', priority: 3 },
   { id: 'register_tone', label_zh: '语域语气', priority: 4 },
+  // Lowest on purpose: a Chinese sentence that is also English practice should be coached
+  // as that, and translation only surfaces when nothing else applies.
+  { id: 'chinese_translation', label_zh: '中文→英文', priority: 5 },
 ];
 
 const BY_ID = new Map(ISSUE_CLASSES.map((c) => [c.id, c]));
@@ -176,7 +181,7 @@ export const ANALYSIS_SYSTEM_PROMPT = [
   'You receive one piece of natural-language text that a developer wrote to the agent.',
   'Return a single JSON object and nothing else with these fields:',
   'issue: null, or an object {class, severity, span, explanation} where class is one of',
-  '"chinese_code_mixing", "grammar_error", "chinglish_collocation", "register_tone",',
+  '"chinese_code_mixing", "chinese_translation", "grammar_error", "chinglish_collocation", "register_tone",',
   'severity is "high"|"medium"|"low", span is the exact substring to improve, explanation is one short sentence.',
   'rewrite: the more natural full sentence (equals the original when issue is null).',
   'reason: one short sentence naming why, shown in a terminal status line.',
@@ -187,6 +192,16 @@ export const ANALYSIS_SYSTEM_PROMPT = [
   'recurrence_of_kp_id: integer or null.',
   'Rules: at most one issue; issue=null implies knowledge_point=null;',
   'issue!=null implies rewrite, reason and knowledge_point are present;',
+  // Measured, not stylistic: with colons or quoted literals here, gpt-4o-mini broke the
+  // JSON object (malformed braces/trailing commas) for short Chinese inputs in 5 of 6
+  // samples; this plain-sentence wording returned a contract-valid object for 5 of 6.
+  // Keep the wording and the separate sentences when editing.
+  'If the message is Chinese, or mostly Chinese, use class chinese_translation.',
+  'Span is the Chinese text. Rewrite is its idiomatic English translation.',
+  'Reason is a short note that it is a translation.',
+  'Knowledge point is the shortest reusable English phrase from the translation, with kind',
+  'expression-unit and rule_key null.',
+  'Use chinese_code_mixing only when the sentence is mostly English with Chinese words inserted.',
   'telegraphic agent-command style is acceptable ellipsis, not an error, so never',
   'manufacture a grammar, collocation or register issue from it (chinese_code_mixing may still be flagged);',
   'never mention code, logs or error output because you will not receive them.',

@@ -72,19 +72,21 @@ Phase B gates decide whether the survivors are worth analyzing:
   start, restart`), no `?` and no internal sentence punctuation -> skip.
 - **G4-low-natural-language** - letters are less than half of non-space characters
   -> skip.
-- **G5-no-english** - fewer than 2 Latin words -> skip (a Chinese message that only
-  borrows one English term is not English practice).
+- **G5-no-coachable-text** - fewer than 2 Latin words **and** fewer than 4 CJK
+  ideographs -> skip. Chinese content is material, not noise: a message with enough
+  Chinese is translated into English (`chinese_translation`), so this gate only drops
+  text that is neither English prose nor Chinese (for example a third script).
 
 A skip records the `skip_reason` and sets `analysis_jobs.status='filtered'`; no model
 call is made. The filter is the single choke point between capture and egress. The filter
 is a conservative heuristic: it redacts or drops anything code-shaped, and new leak
 patterns are added as regression tests in `tests/filter-privacy.test.ts`.
 
-## 3. Four issue classes and telegraphic tolerance
+## 3. Five issue classes and telegraphic tolerance
 
 An analyzed message yields at most one suggestion, so the classifier selects the
 single highest-priority issue: **chinese_code_mixing (1)** > **grammar_error (2)** >
-**chinglish_collocation (3)** > **register_tone (4)**.
+**chinglish_collocation (3)** > **register_tone (4)** > **chinese_translation (5)**.
 
 - `chinese_code_mixing` (中式夹英): CJK ideographs or pinyin inside an otherwise
   English sentence; rewrite replaces the Chinese span with natural English.
@@ -94,6 +96,10 @@ single highest-priority issue: **chinese_code_mixing (1)** > **grammar_error (2)
   unnatural collocation, e.g. `look this bug` -> `look into this bug`.
 - `register_tone` (语域语气): register that misfits a professional request, e.g.
   `Please kindly be so good as to possibly check the logs.` -> `Could you check the logs?`.
+- `chinese_translation` (中文→英文): the message is Chinese, or mostly Chinese, so the
+  suggestion is its idiomatic English translation; the rewrite is that translation and
+  the knowledge point is the shortest reusable English phrase in it. It ranks last so a
+  sentence that is also English practice is coached as that instead.
 
 Telegraphic agent-command style is tolerated as acceptable ellipsis, not an error.
 Allowed patterns include bare imperatives with dropped subject, noun-fragment requests,
@@ -187,13 +193,13 @@ better-sqlite3, WAL mode,
 - **analysis_jobs** (`data-captured-message`, `data-analysis-job`): `id` INTEGER
   PRIMARY KEY AUTOINCREMENT; `message_id` TEXT NOT NULL UNIQUE; `session_id` TEXT;
   `raw_text` TEXT NOT NULL (local only); `filtered_text` TEXT; `skip_reason` TEXT
-  (`empty_after_filter|too_short|telegraphic_command|low_natural_language|no_english`);
+  (`empty_after_filter|too_short|telegraphic_command|low_natural_language|no_coachable_text`);
   `status` TEXT NOT NULL (`queued|running|done|failed|filtered`); `error` TEXT;
   `created_at` TEXT NOT NULL; `finished_at` TEXT; `latency_ms` INTEGER.
 - **instances** (`data-knowledge-instance`, `data-suggestion`): `id` INTEGER PRIMARY
   KEY AUTOINCREMENT; `analysis_job_id` REFERENCES analysis_jobs(id); `original_text`
-  TEXT NOT NULL (the filtered text; the raw message stays in `analysis_jobs.raw_text`); `rewrite_text` TEXT; `reason` TEXT; `issue_class` TEXT (the four
-  class ids or NULL); `created_at` TEXT NOT NULL; `source` TEXT NOT NULL
+  TEXT NOT NULL (the filtered text; the raw message stays in `analysis_jobs.raw_text`); `rewrite_text` TEXT; `reason` TEXT; `issue_class` TEXT (a
+  class id from section 3, or NULL); `created_at` TEXT NOT NULL; `source` TEXT NOT NULL
   (`claude-code:UserPromptSubmit|refluent:review|refluent:manual`); `message_id` TEXT;
   `session_id` TEXT; `model` TEXT; `model_version` TEXT; `filter_version` TEXT.
 - **knowledge_points** (`data-knowledge-point`): `id` INTEGER PRIMARY KEY
