@@ -146,6 +146,38 @@ describe('filter: removal rules', () => {
 
 /** Phase B gates (G1-G4) and their named skip reasons. */
 describe('filter: skip reasons', () => {
+  it('G0 agent_generated for messages the agent harness injected, not the user', () => {
+    const notification = [
+      '<task-notification>',
+      '<task-id>ae9b93ca9c68f370c</task-id>',
+      '<status>completed</status>',
+      '<summary>Agent "Find public HTTP RPC endpoint" finished</summary>',
+      '<result>## 调查结果(只读,未做任何修改)',
+      '### 1. 未认证 PUBLIC 路由走的 HTTP 路径',
+      'The handler only accepts POST and forwards the request to the core service.',
+      '</result>',
+      '</task-notification>',
+    ].join('\n');
+    for (const raw of [
+      notification,
+      '  \n<task-notification>\n<status>completed</status>\n</task-notification>',
+      '<system-reminder>The user sent a new message while you were working.</system-reminder>',
+      '<local-command-stdout>Compacted the conversation history for you</local-command-stdout>',
+      '<command-name>/review</command-name>\n<command-message>review the current branch please</command-message>',
+      '<bash-stdout>everything is up to date with the remote branch</bash-stdout>',
+    ]) {
+      const result = filterNaturalLanguage(raw);
+      expect(result.filteredText).toBeNull();
+      expect(result.skipReason).toBe('agent_generated');
+    }
+  });
+
+  it('G0 still analyzes a user message that merely mentions such a tag', () => {
+    const result = filterNaturalLanguage('Why does the <task-notification> block show up in my suggestions?');
+    expect(result.skipReason).toBeNull();
+    expect(result.filteredText).not.toBeNull();
+  });
+
   it('G1 empty_after_filter when only code survives removal', () => {
     const result = filterNaturalLanguage('```ts\nconst x = 1;\n```');
     expect(result.filteredText).toBeNull();
@@ -202,6 +234,6 @@ describe('filter: skip reasons', () => {
   });
 
   it('exposes a stable filter version', () => {
-    expect(FILTER_VERSION).toBe('filter-v3');
+    expect(FILTER_VERSION).toBe('filter-v4');
   });
 });

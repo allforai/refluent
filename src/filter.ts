@@ -9,10 +9,11 @@
 
 import { isBareShellCommand, isCodeToken, redactLine } from './redact.js';
 
-export const FILTER_VERSION = 'filter-v3';
+export const FILTER_VERSION = 'filter-v4';
 export const MAX_FILTERED_LENGTH = 1500;
 
 export type SkipReason =
+  | 'agent_generated'
   | 'empty_after_filter'
   | 'too_short'
   | 'telegraphic_command'
@@ -187,7 +188,19 @@ function isLowNaturalLanguage(text: string): boolean {
   return letters / nonSpace < 0.5;
 }
 
+/**
+ * Text the agent harness submits through the user-prompt hook without the user having
+ * written it: a background agent's result (`<task-notification>`), a system reminder, a
+ * slash-command or `!` shell echo. They arrive as whole messages that open with the tag;
+ * a user merely mentioning a tag mid-sentence is still the user's writing.
+ */
+const AGENT_GENERATED_RE =
+  /^\s*<(?:task-notification|system-reminder|local-command-(?:stdout|stderr|caveat)|command-(?:name|message|args)|bash-(?:input|stdout|stderr))>/;
+
 export function filterNaturalLanguage(rawText: string): FilterResult {
+  if (AGENT_GENERATED_RE.test(rawText)) {
+    return { filteredText: null, skipReason: 'agent_generated', redactions: [] };
+  }
   const redactions: string[] = [];
   const rawLines = rawText.split(/\r?\n/);
   const fenced = removeFencedRegions(rawLines, redactions);
