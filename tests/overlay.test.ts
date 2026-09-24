@@ -81,14 +81,30 @@ describe('overlay: what is new', () => {
     expect(nextOverlayMessage(db)).toBeNull();
   });
 
-  it('shows an analysis failure once per failure', () => {
+  it('shows a failure the user must fix, once, in plain words', () => {
     prime();
     const at = new Date().toISOString();
     setLastAnalysisResult(db, { outcome: 'failed', at, reason: 'not_configured' });
-    expect(nextOverlayMessage(db)?.rewrite).toBe('analysis unavailable');
+    expect(nextOverlayMessage(db)).toMatchObject({
+      rewrite: 'refluent has no analysis model set up',
+      label: '',
+      reason: 'Run `refluent settings` to set one.',
+    });
     expect(nextOverlayMessage(db)).toBeNull();
-    setLastAnalysisResult(db, { outcome: 'failed', at: new Date(Date.parse(at) + 5000).toISOString(), reason: 'http_error' });
-    expect(nextOverlayMessage(db)?.rewrite).toBe('analysis unavailable');
+    setLastAnalysisResult(db, { outcome: 'failed', at: new Date(Date.parse(at) + 5000).toISOString(), reason: 'auth_rejected' });
+    expect(nextOverlayMessage(db)).toMatchObject({ rewrite: 'The analysis API key was rejected', label: '' });
+    setLastAnalysisResult(db, { outcome: 'failed', at: new Date(Date.parse(at) + 9000).toISOString(), reason: 'http_error_404' });
+    expect(nextOverlayMessage(db)).toMatchObject({ rewrite: 'The analysis request was refused (HTTP 404)', label: '' });
+  });
+
+  it('stays silent on a one-off failure that fixes itself', () => {
+    prime();
+    const at = Date.now();
+    const reasons = ['invalid_response', 'empty_response', 'timeout', 'rate_limited', 'network_error', 'http_error_502', 'analysis_unavailable'];
+    reasons.forEach((reason, i) => {
+      setLastAnalysisResult(db, { outcome: 'failed', at: new Date(at + i * 1000).toISOString(), reason });
+      expect(nextOverlayMessage(db)).toBeNull();
+    });
   });
 
   it('shows the sample on a test request, even before the first poll, and only once', () => {

@@ -92,12 +92,33 @@ export function buildShowMessage(db: DatabaseType, suggestion: Suggestion): Show
   };
 }
 
-function failureMessage(db: DatabaseType): ShowMessage {
+/**
+ * A failure is worth interrupting for only when the user has to fix something; a
+ * malformed reply, a timeout or a 5xx fixes itself and stays in `refluent settings`.
+ */
+function failureNotice(reason: string | null | undefined): { title: string; action: string } | null {
+  if (reason === 'not_configured') {
+    return { title: 'refluent has no analysis model set up', action: 'Run `refluent settings` to set one.' };
+  }
+  if (reason === 'auth_rejected') {
+    return { title: 'The analysis API key was rejected', action: 'Check the key named by model-api-key-env.' };
+  }
+  const http = /^http_error_(4\d\d)$/.exec(reason ?? '');
+  if (http && http[1] !== '429') {
+    return {
+      title: `The analysis request was refused (HTTP ${http[1]})`,
+      action: 'Check the endpoint URL, the model id and billing.',
+    };
+  }
+  return null;
+}
+
+function failureMessage(db: DatabaseType, notice: { title: string; action: string }): ShowMessage {
   return {
     type: 'show',
-    rewrite: 'analysis unavailable',
-    label: 'refluent',
-    reason: 'run `refluent settings`',
+    rewrite: notice.title,
+    label: '',
+    reason: notice.action,
     original: '',
     durationMs: durationMs(db),
     position: readPosition(db),
@@ -137,7 +158,8 @@ export function nextOverlayMessage(db: DatabaseType, now: Date = new Date()): Sh
   }
   if (!message && last?.outcome === 'failed' && last.at !== getSetting(db, LAST_FAILURE_AT_KEY)) {
     setSetting(db, LAST_FAILURE_AT_KEY, last.at);
-    if (isFresh(last.at, now)) message = failureMessage(db);
+    const notice = failureNotice(last.reason);
+    if (notice && isFresh(last.at, now)) message = failureMessage(db, notice);
   }
   return quietModeOn(db) ? null : message;
 }

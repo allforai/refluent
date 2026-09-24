@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { memoryDb } from './helpers.js';
+import { memoryDb, resultFor } from './helpers.js';
 import type { DatabaseType } from '../src/db.js';
 import {
   MODEL_API_KEY_ENV_KEY,
@@ -14,6 +14,8 @@ import { HttpAnalysisClient, analysisClientFor } from '../src/analysis/http.js';
 import { NullAnalysisClient } from '../src/analysis/stub.js';
 import { probeEndpoint } from '../src/install.js';
 import { captureMessage, runAnalysis } from '../src/capture.js';
+import type { AnalysisClient, AnalysisFailure } from '../src/analysis/types.js';
+import type { AnalysisResult } from '../src/issue-classes.js';
 import { handleUserPromptSubmit } from '../src/hook.js';
 import { getLastAnalysisResult, setSetting } from '../src/settings.js';
 
@@ -115,6 +117,57 @@ describe('model config: resolution survives the hook environment', () => {
   it('never prints credentials embedded in the endpoint', () => {
     expect(sanitizedEndpoint('https://user:secret@example.com/v1?token=abc')).toBe('https://example.com/v1');
     expect(sanitizedEndpoint(null)).toBe('(not set)');
+  });
+});
+
+describe('model config: a malformed model reply is retried once', () => {
+  /** Replies with each scripted outcome in turn: a result, or a failure reason. */
+  function scriptedClient(script: Array<AnalysisResult | AnalysisFailure>): AnalysisClient & { calls: number } {
+    const client = {
+      calls: 0,
+      lastFailure: null as AnalysisFailure | null,
+      async analyze() {
+        const next = script[Math.min(client.calls, script.length - 1)]!;
+        client.calls += 1;
+        if (typeof next === 'string') {
+          client.lastFailure = next;
+          return null;
+        }
+        client.lastFailure = null;
+        return next;
+      },
+      async generateQuestion() {
+        return null;
+      },
+    };
+    return client;
+  }
+
+  it('recovers the suggestion when the second reply is valid', async () => {
+    const captured = captureMessage(db, { rawText: 'Can you help me check this bug?' });
+    const client = scriptedClient(['invalid_response', resultFor({ canonicalForm: 'check this bug' })]);
+    const outcome = await runAnalysis(db, client, captured.jobId);
+    expect(client.calls).toBe(2);
+    expect(outcome.status).not.toBe('failed');
+    expect(getLastAnalysisResult(db)?.outcome).toBe('suggestion_emitted');
+  });
+
+  it('records invalid_response when the retry is malformed too', async () => {
+    const captured = captureMessage(db, { rawText: 'Can you help me check this bug?' });
+    const client = scriptedClient(['invalid_response', 'invalid_response', resultFor({ canonicalForm: 'x' })]);
+    const outcome = await runAnalysis(db, client, captured.jobId);
+    expect(client.calls).toBe(2);
+    expect(outcome.reason).toBe('invalid_response');
+  });
+
+  it('does not retry any other failure', async () => {
+    for (const failure of ['not_configured', 'auth_rejected', 'timeout', 'rate_limited', 'http_error_502'] as const) {
+      const captured = captureMessage(db, { rawText: `Can you help me check this ${failure} bug?` });
+      const client = scriptedClient([failure, resultFor({ canonicalForm: 'x' })]);
+      const outcome = await runAnalysis(db, client, captured.jobId);
+      expect(client.calls).toBe(1);
+      expect(outcome.reason).toBe(failure);
+    }
   });
 });
 

@@ -106,12 +106,17 @@ export async function runAnalysis(
   const startedAt = Date.now();
   db.prepare("UPDATE analysis_jobs SET status = 'running' WHERE id = ?").run(jobId);
 
-  let result;
-  try {
-    result = await client.analyze({ filteredText: job.filtered_text, filterVersion: FILTER_VERSION });
-  } catch {
-    result = null;
-  }
+  const analyze = async () => {
+    try {
+      return await client.analyze({ filteredText: job.filtered_text!, filterVersion: FILTER_VERSION });
+    } catch {
+      return null;
+    }
+  };
+  let result = await analyze();
+  // A small model occasionally answers with something that is not the JSON object; the
+  // same request usually succeeds on a second try. Other failures would fail again.
+  if (!result && client.lastFailure === 'invalid_response') result = await analyze();
   const latency = Date.now() - startedAt;
   const finishedAt = nowIso();
 
