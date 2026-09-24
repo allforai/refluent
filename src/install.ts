@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { dataDir, nowIso } from './config.js';
+import { dataDir, nowIso, stableNodePath } from './config.js';
 import type { DatabaseType } from './db.js';
 import { HttpAnalysisClient, analysisClientFor, type EndpointProbe } from './analysis/http.js';
 import { getSetting, setSetting } from './settings.js';
@@ -385,7 +385,7 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
 
   const agent = options.agent ?? DEFAULT_AGENT;
   const definition = agentDefinition(agent);
-  const nodePath = options.nodePath ?? process.execPath;
+  const nodePath = options.nodePath ?? stableNodePath();
 
   let registered: boolean;
   if (definition.capture === 'extension') {

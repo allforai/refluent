@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -68,4 +69,33 @@ export function readModelEnv(env: NodeJS.ProcessEnv = process.env): ModelEnv | n
   if (!endpoint || !model) return null;
   const apiKey = env.REFLUENT_MODEL_API_KEY?.trim();
   return { endpoint, apiKey: apiKey && apiKey.length > 0 ? apiKey : null, model };
+}
+/**
+ * The node written into hook commands and the overlay's LaunchAgent. `process.execPath`
+ * is the resolved binary, which under Homebrew is a versioned Cellar path that the next
+ * `brew upgrade` deletes, breaking every hook. A `node` on PATH that resolves to the same
+ * binary (such as /opt/homebrew/bin/node) keeps working across upgrades.
+ */
+export function stableNodePath(
+  execPath: string = process.execPath,
+  pathEnv: string = process.env.PATH ?? '',
+  realpath: (file: string) => string = (file) => fs.realpathSync(file),
+): string {
+  let target: string;
+  try {
+    target = realpath(execPath);
+  } catch {
+    return execPath;
+  }
+  for (const dir of pathEnv.split(path.delimiter)) {
+    if (dir.length === 0) continue;
+    const candidate = path.join(dir, 'node');
+    if (candidate === execPath) continue;
+    try {
+      if (realpath(candidate) === target) return candidate;
+    } catch {
+      // Not on this PATH entry.
+    }
+  }
+  return execPath;
 }

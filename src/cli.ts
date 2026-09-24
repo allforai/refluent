@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { claudeSettingsPath, codexHooksPath, dataDir, dbPath, piExtensionsDir } from './config.js';
+import { claudeSettingsPath, codexHooksPath, dataDir, dbPath, piExtensionsDir, stableNodePath } from './config.js';
 import { openDatabase, type DatabaseType } from './db.js';
 import { overlayStatus, requestTestOverlay, type OverlayStatus } from './overlay.js';
 import { runOverlay } from './overlay-runner.js';
@@ -412,7 +412,7 @@ export function overlayOptions(): OverlayInstallOptions {
   return {
     paths: defaultOverlayPaths(),
     run: runCommand,
-    nodePath: process.execPath,
+    nodePath: stableNodePath(),
     binPath: resolveBinPath(),
     uid: process.getuid?.() ?? 0,
     dataDirOverride: override && override.length > 0 ? override : null,
