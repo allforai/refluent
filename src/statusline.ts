@@ -26,7 +26,7 @@ const MAX_REASON_CHARS = 60;
 /** A suggestion or failure notice is shown for this long after it was produced. */
 export const STATUSLINE_TTL_MS = 15 * 60 * 1000;
 
-function isFresh(at: string, now: Date): boolean {
+export function isFresh(at: string, now: Date): boolean {
   const t = Date.parse(at);
   return Number.isFinite(t) && now.getTime() - t <= STATUSLINE_TTL_MS;
 }
@@ -113,7 +113,7 @@ function sanitizeOneLine(text: string): string {
 }
 
 /** Cuts to a column budget, protecting `[code]` and marking the cut with `…`. */
-function cutToWidth(text: string, maxColumns: number): string {
+export function cutToWidth(text: string, maxColumns: number): string {
   const oneLine = sanitizeOneLine(text);
   if (displayWidth(oneLine) <= maxColumns) return oneLine;
   if (maxColumns <= 1) return '';

@@ -10,6 +10,7 @@ export const PREFERENCE_KEYS = [
   'session-start-review',
   'quiet-mode',
   'reminder-channel',
+  'overlay-duration',
 ] as const;
 
 export type PreferenceKey = (typeof PREFERENCE_KEYS)[number];
@@ -21,6 +22,7 @@ export const PREFERENCE_DEFAULTS: Readonly<Record<PreferenceKey, string>> = {
   'session-start-review': SETTING_DEFAULTS['session-start-review'],
   'quiet-mode': SETTING_DEFAULTS['quiet-mode'],
   'reminder-channel': SETTING_DEFAULTS['reminder-channel'],
+  'overlay-duration': SETTING_DEFAULTS['overlay-duration'],
 };
 
 export const ALLOWED_VALUES: Readonly<Record<PreferenceKey, readonly string[]>> = {
@@ -30,6 +32,7 @@ export const ALLOWED_VALUES: Readonly<Record<PreferenceKey, readonly string[]>> 
   'session-start-review': ['on', 'off'],
   'quiet-mode': ['on', 'off'],
   'reminder-channel': ['terminal'],
+  'overlay-duration': ['6', '12', '20', '30', '60'],
 };
 
 export function getSetting(db: DatabaseType, key: SettingKey): string | undefined {

@@ -129,6 +129,7 @@ export const SETTING_DEFAULTS: Readonly<Record<string, string>> = {
   'session-start-review': 'on',
   'quiet-mode': 'off',
   'reminder-channel': 'terminal',
+  'overlay-duration': '12',
   hook_installed: 'false',
   hook_seen_at: '',
   endpoint_status: 'not_configured',
