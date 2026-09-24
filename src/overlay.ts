@@ -1,7 +1,6 @@
 import type { DatabaseType } from './db.js';
 import { nowIso } from './config.js';
 import { getLastAnalysisResult, getSetting, quietModeOn, setSetting } from './settings.js';
-import { issueClassLabel, isIssueClass } from './issue-classes.js';
 import { cutToWidth, isFresh, latestSuggestion, type Suggestion } from './statusline.js';
 
 /**
@@ -76,13 +75,16 @@ export function readPosition(db: DatabaseType): OverlayPosition | null {
   }
 }
 
+/**
+ * The panel says how to put it in English and, briefly, what improved. The issue-class
+ * label adds nothing a reader acts on, so a suggestion carries none; a translation's
+ * reason is always "This is a translation.", so a translation is the English alone.
+ */
 export function buildShowMessage(db: DatabaseType, suggestion: Suggestion): ShowMessage {
-  const label = isIssueClass(suggestion.issueClass) ? issueClassLabel(suggestion.issueClass) : 'issue';
   return {
     type: 'show',
     rewrite: field(suggestion.rewrite),
-    label,
-    // A translation's reason only repeats its label, as on the status line.
+    label: '',
     reason: suggestion.issueClass === 'chinese_translation' ? '' : field(suggestion.reason),
     original: field(suggestion.original),
     durationMs: durationMs(db),

@@ -192,7 +192,8 @@ final class OverlayController: NSObject {
   private func render() {
     guard let message else { return }
     rewriteLabel.stringValue = message.rewrite
-    detailLabel.stringValue = message.reason.isEmpty ? message.label : "\(message.label): \(message.reason)"
+    detailLabel.stringValue = [message.label, message.reason].filter { !$0.isEmpty }.joined(separator: ": ")
+    detailLabel.isHidden = detailLabel.stringValue.isEmpty
     originalLabel.stringValue = message.original
     originalLabel.isHidden = !expanded || message.original.isEmpty
     let lines = expanded ? 0 : 2

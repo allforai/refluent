@@ -45,7 +45,7 @@ describe('overlay: what is new', () => {
     seedPoint(db, { canonicalForm: 'check whether', rewrite: 'Please check whether it works.', reason: 'word order' });
     const shown = nextOverlayMessage(db);
     expect(shown).toMatchObject({ type: 'show', rewrite: 'Please check whether it works.', reason: 'word order' });
-    expect(shown?.label).toBe('Chinglish 搭配');
+    expect(shown?.label).toBe('');
     expect(nextOverlayMessage(db)).toBeNull();
   });
 
@@ -102,7 +102,7 @@ describe('overlay: payload', () => {
   it('drops the reason of a translation, as the status line does', () => {
     prime();
     seedPoint(db, { canonicalForm: 'translate', issueClass: 'chinese_translation', rewrite: 'Rename it.', reason: 'translated' });
-    expect(nextOverlayMessage(db)).toMatchObject({ label: '中文→英文', reason: '' });
+    expect(nextOverlayMessage(db)).toMatchObject({ label: '', reason: '' });
   });
 
   it('strips control characters and caps every field', () => {
