@@ -28,6 +28,8 @@ export interface InstallOptions {
   binPath: string;
   env?: NodeJS.ProcessEnv;
   agent?: AgentId;
+  /** The overlay shows suggestions, so Claude Code's statusLine is left to the user. */
+  overlayInstalled?: boolean;
 }
 
 export interface InstallReport {
@@ -98,6 +100,7 @@ export function writeAgentHookConfig(
   nodePath: string,
   binPath: string,
   agent: AgentId = DEFAULT_AGENT,
+  ownStatusLine = true,
 ): HookConfigWrite {
   const settings = readSettingsFile(settingsPath);
   const commands = hookCommands(nodePath, binPath, agent);
@@ -106,7 +109,8 @@ export function writeAgentHookConfig(
     fs.copyFileSync(settingsPath, backupPath);
   }
   let previousStatusLine: Record<string, unknown> | null = null;
-  if (agentDefinition(agent).hasInjectableStatusline) {
+  const claimsStatusLine = agentDefinition(agent).hasInjectableStatusline && ownStatusLine;
+  if (claimsStatusLine) {
     const existing = settings.statusLine;
     previousStatusLine =
       existing && typeof existing === 'object' && !isRefluentEntry(existing)
@@ -127,7 +131,7 @@ export function writeAgentHookConfig(
     { hooks: [{ type: 'command', command: commands.sessionStart }] },
   ];
   settings.hooks = hooks;
-  if (agentDefinition(agent).hasInjectableStatusline) {
+  if (claimsStatusLine) {
     settings.statusLine = { type: 'command', command: commands.statusline };
   }
 
@@ -174,6 +178,48 @@ export function removeHookConfig(settingsPath: string, restoreStatusLine: Record
 
 export const WRAPPED_STATUSLINE_KEY = 'wrapped_statusline';
 
+function storedWrappedStatusLine(db: DatabaseType): Record<string, unknown> | null {
+  const raw = getSetting(db, WRAPPED_STATUSLINE_KEY) ?? '';
+  try {
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Hands Claude Code's statusLine back while the overlay shows suggestions: the user's own
+ * wrapped statusLine, or none at all. A refluent statusLine with nothing to print still
+ * costs the pane an empty row. Returns whether the file changed.
+ */
+export function releaseStatusLine(db: DatabaseType, settingsPath: string): boolean {
+  if (!fs.existsSync(settingsPath)) return false;
+  const settings = readSettingsFile(settingsPath);
+  if (!isRefluentEntry(settings.statusLine)) return false;
+  const restore = storedWrappedStatusLine(db);
+  if (restore) settings.statusLine = restore;
+  else delete settings.statusLine;
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  return true;
+}
+
+/**
+ * Takes Claude Code's statusLine back for refluent when the overlay goes away, wrapping
+ * whatever statusLine the user has by then. Only where refluent's hooks are installed.
+ */
+export function claimStatusLine(db: DatabaseType, settingsPath: string, nodePath: string, binPath: string): boolean {
+  if (!fs.existsSync(settingsPath)) return false;
+  const settings = readSettingsFile(settingsPath);
+  if (!isRefluentEntry((settings.hooks as Record<string, unknown> | undefined)?.UserPromptSubmit)) return false;
+  if (isRefluentEntry(settings.statusLine)) return false;
+  const existing = settings.statusLine;
+  setSetting(db, WRAPPED_STATUSLINE_KEY, existing && typeof existing === 'object' ? JSON.stringify(existing) : '');
+  settings.statusLine = { type: 'command', command: hookCommands(nodePath, binPath, 'claude-code').statusline };
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  return true;
+}
+
 /** The wrapped statusLine command, if any; the refluent statusLine runs it first. */
 export function wrappedStatusLineCommand(db: DatabaseType): string | null {
   const raw = getSetting(db, WRAPPED_STATUSLINE_KEY) ?? '';
@@ -219,11 +265,15 @@ export function runUninstall(db: DatabaseType, settingsPath: string, agent: Agen
   ];
 }
 
-export function verifyAgentHookConfig(settingsPath: string, agent: AgentId = DEFAULT_AGENT): boolean {
+export function verifyAgentHookConfig(
+  settingsPath: string,
+  agent: AgentId = DEFAULT_AGENT,
+  ownStatusLine = true,
+): boolean {
   try {
     const settings = readSettingsFile(settingsPath);
     const json = JSON.stringify(settings);
-    const needsStatusline = agentDefinition(agent).hasInjectableStatusline;
+    const needsStatusline = agentDefinition(agent).hasInjectableStatusline && ownStatusLine;
     return (
       json.includes('refluent') &&
       json.includes('UserPromptSubmit') &&
@@ -394,17 +444,24 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
     messages.push(`Wrote the Pi extension to: ${written}`);
     messages.push('Restart Pi so it loads the extension; it captures your outgoing prompts and shows the suggestion in Pi\'s status bar.');
   } else {
-    const { previousStatusLine } = writeAgentHookConfig(options.settingsPath, nodePath, options.binPath, agent);
+    const ownStatusLine = !options.overlayInstalled;
+    // A stale refluent statusLine from before the overlay is handed back first, so the
+    // rewrite below does not have to know about it.
+    if (!ownStatusLine && definition.hasInjectableStatusline) releaseStatusLine(db, options.settingsPath);
+    const { previousStatusLine } = writeAgentHookConfig(options.settingsPath, nodePath, options.binPath, agent, ownStatusLine);
     if (previousStatusLine) {
       setSetting(db, WRAPPED_STATUSLINE_KEY, JSON.stringify(previousStatusLine));
       messages.push('Your existing statusLine is kept: refluent runs it and adds its own line below.');
     }
-    registered = verifyAgentHookConfig(options.settingsPath, agent);
+    registered = verifyAgentHookConfig(options.settingsPath, agent, ownStatusLine);
     messages.push(
-      definition.hasInjectableStatusline
+      definition.hasInjectableStatusline && ownStatusLine
         ? `Wrote the UserPromptSubmit and SessionStart hooks and the statusLine to: ${options.settingsPath}`
         : `Wrote the UserPromptSubmit and SessionStart hooks to: ${options.settingsPath}`,
     );
+    if (definition.hasInjectableStatusline && !ownStatusLine) {
+      messages.push('Suggestions pop up in the overlay, so the statusLine is left to you.');
+    }
     if (!definition.hasInjectableStatusline) {
       messages.push(
         `${definition.label} has no status line refluent can render into, so suggestions are captured now and read later with \`refluent review\`.`,

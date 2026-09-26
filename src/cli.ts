@@ -197,6 +197,7 @@ async function installCommand(args: string[]): Promise<number> {
     settingsPath,
     binPath: resolveBinPath(),
     agent,
+    overlayInstalled: fs.existsSync(defaultOverlayPaths().plist),
   });
   out('');
   for (const message of report.messages) out(`  ${message}`);
@@ -416,6 +417,7 @@ export function overlayOptions(): OverlayInstallOptions {
     binPath: resolveBinPath(),
     uid: process.getuid?.() ?? 0,
     dataDirOverride: override && override.length > 0 ? override : null,
+    claudeSettingsPath: claudeSettingsPath(),
   };
 }
 

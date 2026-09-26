@@ -7,6 +7,7 @@ import type { DatabaseType } from './db.js';
 import { dataDir } from './config.js';
 import { getSetting, setSetting } from './settings.js';
 import { LAST_SHOWN_ID_KEY, STATUS_KEY } from './overlay.js';
+import { claimStatusLine, releaseStatusLine } from './install.js';
 
 export const OVERLAY_LABEL = 'com.refluent.overlay';
 /** The `statusline-suggestion` value from before the overlay turned it off. */
@@ -48,6 +49,8 @@ export interface OverlayInstallOptions {
   platform?: NodeJS.Platform;
   /** Blocking pause between launchctl polls; a test passes a recorder. */
   sleep?: (ms: number) => void;
+  /** Claude Code settings whose refluent statusLine the overlay replaces, if any. */
+  claudeSettingsPath?: string | null;
 }
 
 export interface OverlayInstallResult {
@@ -178,9 +181,11 @@ export function installOverlay(db: DatabaseType, options: OverlayInstallOptions)
     setSetting(db, PREV_STATUSLINE_KEY, getSetting(db, 'statusline-suggestion') ?? 'on');
   }
   setSetting(db, 'statusline-suggestion', 'off');
+  const releasedRow = options.claudeSettingsPath ? releaseStatusLine(db, options.claudeSettingsPath) : false;
   return {
     ok: true,
     messages: [
+      ...(releasedRow ? ['Removed the refluent status row from Claude Code.'] : []),
       `Overlay helper compiled: ${paths.binary}`,
       `LaunchAgent written and started: ${paths.plist}`,
       'The terminal status line is off; suggestions now pop up in the overlay.',
@@ -198,6 +203,9 @@ export function uninstallOverlay(db: DatabaseType, options: OverlayInstallOption
   const previous = getSetting(db, PREV_STATUSLINE_KEY);
   if (previous) setSetting(db, 'statusline-suggestion', previous);
   setSetting(db, PREV_STATUSLINE_KEY, '');
+  const claimedRow = options.claudeSettingsPath
+    ? claimStatusLine(db, options.claudeSettingsPath, options.nodePath, options.binPath)
+    : false;
   setSetting(db, LAST_SHOWN_ID_KEY, '');
   setSetting(db, STATUS_KEY, '');
   return {
@@ -205,6 +213,7 @@ export function uninstallOverlay(db: DatabaseType, options: OverlayInstallOption
     messages: [
       'Overlay stopped and removed.',
       previous ? `Terminal status line restored to: ${previous}` : 'Terminal status line unchanged.',
+      ...(claimedRow ? ['Put the refluent status row back in Claude Code.'] : []),
     ],
   };
 }

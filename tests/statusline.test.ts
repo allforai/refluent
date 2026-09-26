@@ -7,7 +7,7 @@ import type { DatabaseType } from '../src/db.js';
 import { getSetting, setLastAnalysisResult, setSetting } from '../src/settings.js';
 import { renderStatusline, statuslineBudget, statuslineBudgetFor, displayWidth, showOriginalFor, PI_STATUSLINE_BUDGET, STATUSLINE_TTL_MS } from '../src/statusline.js';
 import { handleStatusline } from '../src/hook.js';
-import { runInstall, runUninstall, WRAPPED_STATUSLINE_KEY } from '../src/install.js';
+import { claimStatusLine, releaseStatusLine, runInstall, runUninstall, WRAPPED_STATUSLINE_KEY } from '../src/install.js';
 
 let db: DatabaseType;
 let tmpDir: string;
@@ -345,5 +345,73 @@ describe('statusline: the line stays bounded so the rewrite keeps its place', ()
     expect(renderStatusline(db)).toBe(
       'refluent: Can you help me look this bug? → Can you look into this bug? (Chinglish 搭配: natural verb)',
     );
+  });
+});
+
+describe('statusline: the overlay owns the suggestion, so no empty status row is left', () => {
+  const orca = { type: 'command', command: '/opt/orca/statusline.sh', padding: 0 };
+  const node = 'node';
+  const bin = '/x/bin/refluent';
+
+  function settingsFile(content: Record<string, unknown>): string {
+    const settingsPath = path.join(tmpDir, 'claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(content), 'utf8');
+    return settingsPath;
+  }
+  const read = (p: string) => JSON.parse(fs.readFileSync(p, 'utf8')) as Record<string, any>;
+
+  it('install leaves the statusLine alone while the overlay is installed', async () => {
+    const settingsPath = settingsFile({ statusLine: orca });
+    const report = await runInstall(db, { consent: true, settingsPath, nodePath: node, binPath: bin, env: {}, overlayInstalled: true });
+    expect(report.installed).toBe(true);
+    const saved = read(settingsPath);
+    expect(saved.statusLine).toEqual(orca);
+    expect(JSON.stringify(saved.hooks)).toContain('refluent');
+    expect(getSetting(db, WRAPPED_STATUSLINE_KEY) ?? '').toBe('');
+  });
+
+  it('install with the overlay drops a stale refluent statusLine instead of re-adding it', async () => {
+    const settingsPath = settingsFile({});
+    await runInstall(db, { consent: true, settingsPath, nodePath: node, binPath: bin, env: {} });
+    expect(read(settingsPath).statusLine.command).toContain('refluent');
+    await runInstall(db, { consent: true, settingsPath, nodePath: node, binPath: bin, env: {}, overlayInstalled: true });
+    expect(read(settingsPath).statusLine).toBeUndefined();
+  });
+
+  it('release removes the refluent statusLine when the user had none', async () => {
+    const settingsPath = settingsFile({});
+    await runInstall(db, { consent: true, settingsPath, nodePath: node, binPath: bin, env: {} });
+    expect(releaseStatusLine(db, settingsPath)).toBe(true);
+    expect(read(settingsPath).statusLine).toBeUndefined();
+    expect(JSON.stringify(read(settingsPath).hooks)).toContain('refluent');
+  });
+
+  it('release hands back the statusLine refluent was wrapping', async () => {
+    const settingsPath = settingsFile({ statusLine: orca });
+    await runInstall(db, { consent: true, settingsPath, nodePath: node, binPath: bin, env: {} });
+    expect(releaseStatusLine(db, settingsPath)).toBe(true);
+    expect(read(settingsPath).statusLine).toEqual(orca);
+  });
+
+  it('claim takes the statusLine back, wrapping what the user has now', async () => {
+    const settingsPath = settingsFile({ statusLine: orca });
+    await runInstall(db, { consent: true, settingsPath, nodePath: node, binPath: bin, env: {}, overlayInstalled: true });
+    expect(claimStatusLine(db, settingsPath, node, bin)).toBe(true);
+    expect(read(settingsPath).statusLine.command).toBe(`${node} ${bin} hook statusline --agent claude-code`);
+    expect(JSON.parse(getSetting(db, WRAPPED_STATUSLINE_KEY)!)).toEqual(orca);
+  });
+
+  it('claim does nothing when refluent is not installed in that file', () => {
+    const settingsPath = settingsFile({ statusLine: orca });
+    expect(claimStatusLine(db, settingsPath, node, bin)).toBe(false);
+    expect(read(settingsPath).statusLine).toEqual(orca);
+  });
+
+  it('release and claim tolerate a missing settings file', () => {
+    const missing = path.join(tmpDir, 'nope', 'settings.json');
+    expect(releaseStatusLine(db, missing)).toBe(false);
+    expect(claimStatusLine(db, missing, node, bin)).toBe(false);
+    expect(fs.existsSync(missing)).toBe(false);
   });
 });

@@ -116,7 +116,8 @@ node bin/refluent settings set overlay-duration 20   # 6 | 12 | 20 | 30 | 60 sec
 node bin/refluent overlay uninstall   # removes it and brings the status line back
 ```
 
-Installing turns `statusline-suggestion` off; uninstalling restores its previous value.
+Installing turns `statusline-suggestion` off and removes refluent's status row from Claude
+Code (handing back any statusLine of your own it was wrapping); uninstalling restores both.
 Set it back to `on` if you want both. `refluent settings reset` also turns
 `statusline-suggestion` back on, so both surfaces show until you set it off again.
 

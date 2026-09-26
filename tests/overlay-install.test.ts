@@ -60,6 +60,7 @@ function options(): OverlayInstallOptions {
     dataDirOverride: null,
     platform: 'darwin',
     sleep: (ms) => slept.push(ms),
+    claudeSettingsPath: path.join(tmp, 'claude', 'settings.json'),
   };
 }
 
@@ -160,6 +161,47 @@ describe('overlay install', () => {
     installOverlay(db, options());
     uninstallOverlay(db, options());
     expect(getSetting(db, 'statusline-suggestion')).toBe('off');
+  });
+});
+
+describe('overlay: Claude Code status row', () => {
+  function claudeSettings(content: Record<string, unknown>): string {
+    const file = options().claudeSettingsPath!;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(content), 'utf8');
+    return file;
+  }
+  const read = (file: string) => JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, any>;
+  const refluentHooks = {
+    UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'node /x/bin/refluent hook user-prompt-submit' }] }],
+  };
+
+  it('install removes the empty refluent status row, uninstall brings it back', () => {
+    const file = claudeSettings({
+      hooks: refluentHooks,
+      statusLine: { type: 'command', command: 'node /x/bin/refluent hook statusline' },
+    });
+    expect(installOverlay(db, options()).ok).toBe(true);
+    expect(read(file).statusLine).toBeUndefined();
+    expect(uninstallOverlay(db, options()).ok).toBe(true);
+    expect(read(file).statusLine.command).toBe('/usr/local/bin/node /repo/bin/refluent hook statusline --agent claude-code');
+  });
+
+  it('does not touch Claude Code settings when the install fails', () => {
+    const file = claudeSettings({
+      hooks: refluentHooks,
+      statusLine: { type: 'command', command: 'node /x/bin/refluent hook statusline' },
+    });
+    failing.add('launchctl bootstrap');
+    bootstrapRaces = 0;
+    expect(installOverlay(db, options()).ok).toBe(false);
+    expect(read(file).statusLine.command).toContain('refluent');
+  });
+
+  it('works without any Claude Code settings file', () => {
+    expect(installOverlay(db, options()).ok).toBe(true);
+    expect(uninstallOverlay(db, options()).ok).toBe(true);
+    expect(fs.existsSync(options().claudeSettingsPath!)).toBe(false);
   });
 });
 
