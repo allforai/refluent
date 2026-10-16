@@ -2,6 +2,7 @@
   "name": "refluent",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Turn your outgoing coding-agent messages into English phrasing suggestions and durable, locally-owned knowledge points.",
   "type": "module",
   "bin": {
