@@ -1,271 +1,187 @@
 # refluent
 
-Turns the English you already write to a coding agent into phrasing suggestions and
-durable, locally-owned knowledge points — so written English improves during work
-instead of in a separate study session.
+[中文](README.zh-CN.md)
 
-It runs as three Claude Code hooks. Every message you send to the agent is captured,
-filtered, and (asynchronously) checked by a small model you point it at. A single
-corrective line appears on your status line, and the underlying knowledge points come
-back later as production questions in `refluent review`.
+**Improve your written English from the prompts you already send to coding agents.**
 
-Nothing is written back into the agent's context. The database that holds your knowledge
-points stays on your machine; the only thing that leaves it is the filtered text of a
-message you sent (see [Data and privacy](#data-and-privacy)).
+You write to Claude Code, Codex or Pi in English (or in Chinese) all day. refluent reads
+each message in the background, and when a sentence could be better it shows you one line:
 
-## Requirements
+```
+refluent: Please help me check this code whether has bug. → Please check whether this code has a bug. (语法错误: Keep statement order after "whether".)
+```
 
-- **Node.js >= 22**
-- **Claude Code** for the hook integration (the CLI itself works without it)
-- An **OpenAI-compatible chat-completions endpoint** for analysis. Without one the
-  product still captures and filters, but produces no suggestions: analysis fails
-  silently and the agent conversation is unaffected.
+Write in Chinese and you get the idiomatic English instead:
 
-## Install
+```
+refluent: 帮我看看这个登录 bug 为什么一直失败 → Can you help me look into why this login bug keeps failing? (中文→英文)
+```
+
+Each correction becomes a knowledge point, and `refluent review` later asks you to produce
+it yourself — so the English sticks without a separate study session.
+
+- **Never in the agent's way.** Nothing is written back into the agent's context, and the
+  hook returns immediately; analysis runs detached.
+- **Local data.** Your messages and knowledge points live in one SQLite file on your machine.
+- **Bring your own model.** Any OpenAI-compatible endpoint; a small model is enough
+  (about $0.03/month at 200 messages a day with `openai/gpt-4o-mini`).
+
+## Who it's for
+
+Developers who are not native English speakers — especially Chinese speakers — and who
+spend their day writing to a coding agent. The issue labels are in Chinese
+(`语法错误`, `中式夹英`, `Chinglish 搭配`, `语域语气`, `中文→英文`); the suggestions and
+reasons are in English.
+
+## Quick start
+
+Requires **macOS**, **Node.js >= 22**, and an API key for an OpenAI-compatible
+endpoint. The example uses [OpenRouter](https://openrouter.ai).
 
 ```sh
-npm ci
-npm run build          # bin/ and hooks/ load dist/
-node bin/refluent install
+git clone https://github.com/allforai/refluent.git && cd refluent
+npm ci && npm run build
+npm link                                    # optional: puts `refluent` on your PATH
+
+refluent settings set model-endpoint https://openrouter.ai/api/v1
+refluent settings set model openai/gpt-4o-mini
+refluent settings set model-api-key-env OPENROUTER_API_KEY   # the *name* of the variable
+refluent install                            # adds the Claude Code hooks
 ```
 
-Every command below is shown as `node bin/refluent ...`, which works from the repository
-root without any extra setup. To get a short `refluent` command instead, put it on your
-PATH once (optional):
+Restart Claude Code and send a message. Without `npm link`, run every command as
+`node bin/refluent ...` from the repository root.
 
-```sh
-npm link               # or: npm install -g .
-```
+The API key itself is never stored — refluent looks it up by name in the environment
+Claude Code gives its hooks, so `OPENROUTER_API_KEY` must be set where Claude Code runs.
+`refluent install` tells you if it can't reach it.
 
-`install` asks for consent, then merges the three hooks into your Claude Code settings,
-wraps (never replaces) your existing `statusLine`, and writes a one-time copy of the
-file to `settings.json.refluent-backup`. It prints the capture state and a real
-endpoint probe:
+## Everyday use
 
-```
-  hook status    : installed_not_loaded     # it becomes loaded once Claude Code runs it
-  endpoint status: ready
-  capture        : enabled
-```
+There is nothing to remember during a conversation:
 
-Point it at a model. Claude Code runs the hooks as children of the agent, so the
-endpoint and model are stored locally (they are not secrets) — an environment only
-needs to exist for the very first `install`:
+- **Every message you send** is captured and filtered. Code, logs, stack traces, bare
+  commands and short imperatives are dropped before anything reaches the model.
+- **The status line** shows at most one suggestion, below your own status line if you have
+  one. A suggestion expires after 15 minutes.
+- **A new session** tells you how many review items are due. The notice is shown to you
+  only and never injected into the agent's context.
+- **`refluent review`** asks production questions drawn from your own sentences —
+  Chinese→English, rewriting your own sentence, and fill-in — and grades your answers
+  through the same pipeline.
 
-```sh
-# one-time, read by `install` and stored locally
-export REFLUENT_MODEL_ENDPOINT="https://api.example.com/v1"   # base URL, no /chat/completions
-export REFLUENT_MODEL="some-small-model"
-```
+## Configuration
 
-Or set them directly at any time, without any shell profile:
-
-```sh
-node bin/refluent settings set model-endpoint https://api.example.com/v1
-node bin/refluent settings set model some-small-model
-```
-
-The API key is the one secret and is **never stored**. Name the environment variable
-that already holds it, so the hook looks it up by name:
-
-```sh
-node bin/refluent settings set model-api-key-env OPENROUTER_API_KEY   # or any var name
-```
-
-Naming a variable does not move a value between environments: the hook reads it from
-the environment **Claude Code passes to its hook commands**, which is the agent's
-environment. A variable that exists only in a separate terminal is not visible there, so
-verify it in the hook's own environment (`refluent install` says which variable it could
-not reach, and `refluent settings` shows which one the hook resolves).
-
-`REFLUENT_MODEL_ENDPOINT`, `REFLUENT_MODEL` and `REFLUENT_MODEL_API_KEY` still work and
-win over the stored values for a single command (for example a one-off `refluent
-review` against another model). After changing what the hooks should use, restart
-Claude Code.
-
-`node bin/refluent settings` is the single place that shows what the hook really
-resolves — endpoint, model, the *name* of the key's variable, and why the last analysis
-failed:
+`refluent settings` shows every switch and what the hook really resolves — endpoint,
+model, the name of the key's variable, and why the last analysis failed:
 
 ```
 Analysis model (what the hook really resolves):
-  endpoint       : https://api.example.com/v1 (source: local settings)
-  model          : some-small-model (source: local settings)
+  endpoint       : https://openrouter.ai/api/v1 (source: local settings)
+  model          : openai/gpt-4o-mini (source: local settings)
   api key        : read from env OPENROUTER_API_KEY
-
-Last analysis result (read-only):
-  failed at 2026-01-01T00:00:00.000Z — not_configured
-  why: no analysis model is configured for the hook — run `refluent settings set model-endpoint <url>` ...
 ```
+
+```sh
+refluent settings set quiet-mode on              # suppress every terminal output
+refluent settings set statusline-suggestion off  # no suggestion on the status line
+refluent settings set statusline-original off    # drop your own sentence from the line
+refluent settings reset                          # switches only; model config is kept
+```
+
+Model keys are `model-endpoint`, `model` and `model-api-key-env`; pass `none` to clear one.
+The environment variables `REFLUENT_MODEL_ENDPOINT`, `REFLUENT_MODEL` and
+`REFLUENT_MODEL_API_KEY` override the stored values for a single command. After changing
+what the hooks use, restart Claude Code.
 
 Failure reasons are sanitized (`not_configured`, `auth_rejected`, `rate_limited`,
 `timeout`, `network_error`, `empty_response`, `invalid_response`, `http_error_<status>`)
 and never include response bodies or your text.
 
-## Floating overlay (macOS)
-
-Instead of a row in every agent pane, suggestions can pop up in one small floating panel
-over whatever app you are in. It never takes keyboard focus, appears only when there is
-a new suggestion, and fades after 12 seconds (hover to keep it, click to see your
-original sentence, drag to move it — the position is remembered).
+## Supported agents
 
 ```sh
-node bin/refluent overlay install     # needs Xcode command line tools (swiftc)
-node bin/refluent overlay test        # show a sample, then drag it into place
-node bin/refluent settings set overlay-duration 20   # 6 | 12 | 20 | 30 | 60 seconds
-node bin/refluent overlay uninstall   # removes it and brings the status line back
+refluent install --agent claude-code   # default
+refluent install --agent codex
+refluent install --agent pi
 ```
 
-Installing turns `statusline-suggestion` off and removes refluent's status row from Claude
-Code (handing back any statusLine of your own it was wrapping); uninstalling restores both.
-Set it back to `on` if you want both. `refluent settings reset` also turns
-`statusline-suggestion` back on, so both surfaces show until you set it off again.
-
-## Agents
-
-Capture and display are separate, because the platforms differ. `--agent` selects the
-target; the default is Claude Code, and `uninstall` takes the same flag.
-
-```sh
-node bin/refluent install --agent claude-code   # default
-node bin/refluent install --agent codex
-node bin/refluent install --agent pi
-```
+`uninstall` takes the same flag.
 
 | | Claude Code | Codex | Pi |
 |---|---|---|---|
 | capture | `UserPromptSubmit` hook | `UserPromptSubmit` hook | `before_agent_start` extension |
-| where | `~/.claude/settings.json` | `$CODEX_HOME/hooks.json` | `~/.pi/agent/extensions/refluent.ts` |
-| suggestion shown in | the wrapped status line | — (read it with `refluent review`) | Pi's status bar, its own key |
+| written to | `~/.claude/settings.json` | `$CODEX_HOME/hooks.json` | `~/.pi/agent/extensions/refluent.ts` |
+| suggestion shown in | status line (wrapped, never replaced) | — (use `refluent review` or the overlay) | Pi's status bar, under its own key |
 
-- **Codex** resolves its hooks file against `CODEX_HOME`, not the literal `~/.codex`: a
-  manager such as Orca runs Codex with a per-account home, and a hook written to
-  `~/.codex/hooks.json` is never read. Existing hooks (for example Orca's own) are kept and
-  the file is backed up. Codex runs only hooks it has **trusted**, so it asks you to approve
-  this one the first time it sees it; `codex exec` needs that approval too (or
-  `--dangerously-bypass-hook-trust` in automation). Codex's status line is a built-in
-  toggle, so nothing can be injected into it.
-- **Pi** has no hook file, so `install --agent pi` writes a small extension. Pi's status bar
-  is keyed (`ctx.ui.setStatus("refluent", …)`), so refluent's line coexists with other
-  extensions' lines instead of competing for one slot. Restart Pi to load it.
-- Every adapter maps its own payload onto one contract (`prompt` plus optional
-  `session_id`/`message_id`), and each knowledge point records where it came from
-  (`claude-code:UserPromptSubmit`, `codex:UserPromptSubmit`, `pi:before-agent-start`).
+- **Claude Code**: `install` asks for consent, merges the hooks, wraps your existing
+  `statusLine`, and keeps a one-time backup at `settings.json.refluent-backup`.
+- **Codex** reads its hooks from `CODEX_HOME`, not the literal `~/.codex`, so managers that
+  run Codex with a per-account home work too. Existing hooks are kept and the file is backed
+  up. Codex asks you to trust the hook the first time it sees it.
+- **Pi** gets a small extension. Restart Pi to load it. Your own sentence is left out of
+  Pi's shared status bar unless you set `statusline-original on`.
 
-## Use
+## Floating overlay
 
-Nothing to remember during a conversation:
-
-- **Every message you send** is captured and filtered. Code, logs, stack traces, bare
-  commands and short imperatives are dropped before anything reaches the model.
-- **A message written in Chinese is translated into English.** The suggestion is its
-  idiomatic English sentence, and the expression it reuses becomes a knowledge point, so
-  it can come back in review as a Chinese→English question.
-- **The status line** shows at most one suggestion:
-  `refluent: <your sentence> → <better phrasing> (<why>)`. Your own wrapped status line is
-  printed first and refluent's line is appended below it; a suggestion expires after
-  15 minutes. On Pi your sentence is left out (its footer row is shared with other
-  extensions' statuses, so a long line is cut by Pi) — set `statusline-original on` to
-  force it back, or `off` to drop it everywhere.
-- **Session start** shows you one line: `refluent: N review item(s) ... are due. Run
-  \`refluent review\` in a terminal.` It is sent as a JSON `systemMessage`, so it is
-  visible to you and never injected into the agent's context. It does not call the model.
-- **`node bin/refluent review`** asks production questions drawn from your own sentences —
-  Chinese→English, rewriting your own sentence, and fill-in — and feeds your answers
-  back through the same correction pipeline. Grammar-rule answers are left ungraded
-  (schedule untouched) when the model is unavailable.
-
-Switches:
+Instead of a status row in every agent pane, suggestions can pop up in one small floating
+panel over whatever app you are in. It never takes keyboard focus and fades after 12
+seconds — hover to keep it, click to see your original sentence, drag to move it.
 
 ```sh
-node bin/refluent settings                          # show switches + real enablement state
-node bin/refluent settings set quiet-mode on        # suppress every terminal output
-node bin/refluent settings set statusline-suggestion off
-node bin/refluent settings set statusline-original off    # drop your own sentence from the line
-node bin/refluent settings reset                    # switches only; model config is kept
+refluent overlay install     # needs Xcode command line tools (swiftc)
+refluent overlay test        # show a sample, then drag it into place
+refluent settings set overlay-duration 20   # 6 | 12 | 20 | 30 | 60 seconds
+refluent overlay uninstall   # removes it and brings the status line back
 ```
 
-Model configuration uses the same command with its own keys — `model-endpoint`,
-`model`, `model-api-key-env`; pass `none` to clear one.
+The overlay also pops up when analysis fails for a reason you have to fix — no model
+configured, a rejected key, or a request refused with HTTP 4xx. Timeouts and other
+transient failures stay quiet and show up in `refluent settings`.
+
+Installing the overlay turns `statusline-suggestion` off; uninstalling turns it back on.
 
 ## Data and privacy
 
-- Your learner data — messages, filtered text, knowledge points and settings — lives in one
-  user-level SQLite database: `~/.refluent/analysis-and-data.sqlite`. Override the directory
-  with `REFLUENT_DATA_DIR`. Nothing is written inside a repository.
-- Deleting `~/.refluent` removes that local data; the product keeps no server-side copy.
-- **The analysis is remote.** For each message worth analysing, its *filtered* text is sent
-  to the OpenAI-compatible endpoint you configure, and the endpoint's reply is used to build
-  the suggestion. Anything you do not configure an endpoint for stays local.
-- Only filtered natural-language text is sent. Source code, logs and error output are
-  stripped, or replaced with a `[code]` placeholder, before the request.
-
-## Test
-
-```sh
-npm test          # vitest unit/integration suite (in-memory SQLite, no network)
-npm run typecheck
-npm run build
-```
-
-End-to-end verification against the real CLI, the real hook entrypoints and a **local**
-fake OpenAI-compatible endpoint (no network, no real Claude config touched):
-
-```sh
-node scripts/verify-product-acceptance.mjs /tmp/refluent-evidence.json
-```
-
-It drives install → capture → suggestion → knowledge point → recurrence → review →
-uninstall and writes every raw observation to the JSON file. It uses throwaway
-`REFLUENT_DATA_DIR` / `REFLUENT_CLAUDE_SETTINGS` paths, so it is safe to run repeatedly.
-
-To try the hooks yourself without touching your real Claude Code configuration:
-
-```sh
-TMP=$(mktemp -d)
-REFLUENT_DATA_DIR="$TMP/data" REFLUENT_CLAUDE_SETTINGS="$TMP/settings.json" node bin/refluent install --yes
-printf '{"prompt":"Can you help me 看看 this bug?"}' | REFLUENT_DATA_DIR="$TMP/data" REFLUENT_CLAUDE_SETTINGS="$TMP/settings.json" node bin/refluent hook user-prompt-submit
-REFLUENT_DATA_DIR="$TMP/data" REFLUENT_CLAUDE_SETTINGS="$TMP/settings.json" node bin/refluent settings
-```
-
-No Claude login is involved: this drives the CLI and the hook entrypoints directly, and
-writes only inside the temporary directory.
+- Messages, filtered text, knowledge points and settings live in one SQLite database at
+  `~/.refluent/analysis-and-data.sqlite` (override the directory with `REFLUENT_DATA_DIR`).
+  Nothing is written inside your repositories, and there is no server-side copy.
+- **Analysis is remote.** For each message worth analysing, its *filtered* text is sent to
+  the endpoint you configure. Source code, logs and error output are stripped or replaced
+  with a `[code]` placeholder first.
+- Deleting `~/.refluent` removes all local data.
 
 ## Uninstall
 
 ```sh
-node bin/refluent uninstall
+refluent uninstall
 ```
 
-Removes every refluent hook, restores the status line you had before (or removes the key
-if you had none), and leaves your knowledge points in place. Delete `~/.refluent` to
-remove the data too.
+Removes every refluent hook and restores the status line you had before. Knowledge points
+are kept; delete `~/.refluent` to remove them too.
 
 ## Known limits
 
-- **Requires your own model endpoint.** With none configured, analysis fails silently by
-  design: captured and stored locally with the failure recorded, but no suggestion and no
-  knowledge point are produced. The status line says the analysis was unavailable and
-  `refluent settings` names the sanitized reason, so a missing configuration, a rejected
-  key and a timeout are distinguishable.
-- **Display budget.** The status line is one bounded, single-line, control-sequence-free
-  string (worst case 250 characters; original and rewrite capped at 80 columns, the reason
-  at 60). Newlines, tabs and ANSI escapes are stripped, a redaction placeholder is never
-  cut in half, and a cut prefers a word boundary.
-- **Narrow panes.** Claude Code truncates an over-wide status line with `…` instead of
-  wrapping, and it does not tell the command how wide the pane is. refluent therefore reads
-  the width from the agent's own TTY (`ps -o tty=` + `stty -f`), and when the full form does
-  not fit it gives up the *least* useful part first: the redundant issue-class label, then
-  the user's own sentence (already in the transcript), and only then the reason. The
-  rewrite and the reason survive as long as possible. Widths are in terminal columns, so a
-  CJK label counts as two. If the width cannot be discovered, the bounded form is used
-  unchanged. Two known limits remain upstream: multi-line output is dropped to one line on
-  macOS, and an over-wide line is never wrapped.
-- **`[code]` placeholders.** Filtered-out code appears as `[code]`, including inside
-  review question context, which can read oddly for a sentence that was mostly code.
-- **Written English only.** Speech, pronunciation and rich formatting are out of scope.
-- **Single local user.** No accounts, no sync, no multi-device merge.
-- **Linux/macOS only, verified on macOS.** Paths assume a POSIX home directory; Windows
-  is untested.
-- **CLI surfaces are text.** There is no graphical UI, so visual checks are limited to
-  captured terminal output rather than screenshots.
+- **Requires your own model endpoint.** With none configured, messages are captured but no
+  suggestions are produced; `refluent settings` says why.
+- **Written English only.** Speech and pronunciation are out of scope.
+- **Single local user.** No accounts, no sync across devices.
+- **macOS only.** Linux and Windows are not supported.
+- **`[code]` placeholders** can make a review question read oddly when the original sentence
+  was mostly code.
+- Claude Code cuts an over-wide status line with `…`; refluent fits the line to the pane
+  width when it can detect it.
+
+## Development
+
+```sh
+npm test
+npm run typecheck
+```
+
+See [docs/development.md](docs/development.md) for end-to-end verification, sandboxed
+hook testing, model benchmarks and how the status line is fitted to narrow panes.
+
+## License
+
+[MIT](LICENSE)

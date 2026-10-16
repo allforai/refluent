@@ -17,6 +17,9 @@
   "engines": {
     "node": ">=22"
   },
+  "os": [
+    "darwin"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
