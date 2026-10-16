@@ -1,7 +1,6 @@
 {
   "name": "refluent",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
   "description": "Turn your outgoing coding-agent messages into English phrasing suggestions and durable, locally-owned knowledge points.",
   "type": "module",
@@ -23,7 +22,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -34,5 +34,13 @@
     "@types/node": "^24.0.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/allforai/refluent.git"
+  },
+  "homepage": "https://github.com/allforai/refluent#readme",
+  "bugs": {
+    "url": "https://github.com/allforai/refluent/issues"
   }
 }

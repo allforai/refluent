@@ -37,9 +37,7 @@ refluent: 帮我看看这个登录 bug 为什么一直失败 → Can you help me
 下面以 [OpenRouter](https://openrouter.ai) 为例：
 
 ```sh
-git clone https://github.com/allforai/refluent.git && cd refluent
-npm ci && npm run build
-npm link                                    # 可选：把 `refluent` 命令加到 PATH
+npm install -g refluent
 
 refluent settings set model-endpoint https://openrouter.ai/api/v1
 refluent settings set model openai/gpt-4o-mini
@@ -47,8 +45,7 @@ refluent settings set model-api-key-env OPENROUTER_API_KEY   # 填的是环境�
 refluent install                            # 安装 Claude Code 的 hooks
 ```
 
-重启 Claude Code，发一条消息就能看到效果。如果没有执行 `npm link`，就在仓库根目录用
-`node bin/refluent ...` 运行所有命令。
+重启 Claude Code，发一条消息就能看到效果。
 
 API key 本身永远不会被保存——refluent 按名字到 Claude Code 传给 hook 的环境里去读，
 所以 `OPENROUTER_API_KEY` 必须在 Claude Code 运行的环境里存在。读不到时
@@ -164,10 +161,17 @@ refluent uninstall
 
 ## 开发
 
+如果想从源码运行，而不是用 npm 包：
+
 ```sh
+git clone https://github.com/allforai/refluent.git && cd refluent
+npm ci && npm run build
+npm link          # 可选：把 `refluent` 加到 PATH；否则用 `node bin/refluent ...`
 npm test
 npm run typecheck
 ```
+
+hooks 指向的是这个源码目录，所以安装 refluent 期间不要移动或删除它。
 
 端到端验证、沙箱里测试 hooks、模型对比测试，以及状态栏如何适配窄窗格，
 见 [docs/development.md](docs/development.md)（英文）。

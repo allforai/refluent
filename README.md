@@ -39,9 +39,7 @@ Requires **macOS**, **Node.js >= 22**, and an API key for an OpenAI-compatible
 endpoint. The example uses [OpenRouter](https://openrouter.ai).
 
 ```sh
-git clone https://github.com/allforai/refluent.git && cd refluent
-npm ci && npm run build
-npm link                                    # optional: puts `refluent` on your PATH
+npm install -g refluent
 
 refluent settings set model-endpoint https://openrouter.ai/api/v1
 refluent settings set model openai/gpt-4o-mini
@@ -49,8 +47,7 @@ refluent settings set model-api-key-env OPENROUTER_API_KEY   # the *name* of the
 refluent install                            # adds the Claude Code hooks
 ```
 
-Restart Claude Code and send a message. Without `npm link`, run every command as
-`node bin/refluent ...` from the repository root.
+Restart Claude Code and send a message.
 
 The API key itself is never stored — refluent looks it up by name in the environment
 Claude Code gives its hooks, so `OPENROUTER_API_KEY` must be set where Claude Code runs.
@@ -174,10 +171,17 @@ are kept; delete `~/.refluent` to remove them too.
 
 ## Development
 
+To run from a clone instead of the npm package:
+
 ```sh
+git clone https://github.com/allforai/refluent.git && cd refluent
+npm ci && npm run build
+npm link          # optional: puts `refluent` on your PATH; otherwise use `node bin/refluent ...`
 npm test
 npm run typecheck
 ```
+
+The hooks point at the checkout, so keep it in place while refluent is installed.
 
 See [docs/development.md](docs/development.md) for end-to-end verification, sandboxed
 hook testing, model benchmarks and how the status line is fitted to narrow panes.
