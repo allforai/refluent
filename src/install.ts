@@ -4,7 +4,7 @@ import { dataDir, nowIso, stableNodePath } from './config.js';
 import type { DatabaseType } from './db.js';
 import { HttpAnalysisClient, analysisClientFor, type EndpointProbe } from './analysis/http.js';
 import { getSetting, setSetting } from './settings.js';
-import { DEFAULT_AGENT, agentDefinition, type AgentId } from './agents.js';
+import { DEFAULT_AGENT, agentDefinition, type AgentDefinition, type AgentId } from './agents.js';
 import { PI_EXTENSION_FILENAME, piExtensionSource } from './pi-extension.js';
 import {
   MODEL_ENDPOINT_KEY,
@@ -41,8 +41,21 @@ export interface InstallReport {
   endpoint: EndpointProbe;
   dataDir: string;
   dataDirWritable: boolean;
+  apiKey: ApiKeyStatus;
   messages: string[];
 }
+
+/**
+ * Whether this shell can see the analysis key, by variable name only. `not_applicable`
+ * means no model is configured yet; `not_named` is fine for a keyless local endpoint.
+ */
+export interface ApiKeyStatus {
+  status: 'found' | 'missing' | 'not_named' | 'not_applicable';
+  envName: string | null;
+}
+
+const SET_MODEL_COMMANDS =
+  '`refluent settings set model-endpoint <url>`, `refluent settings set model <id>` and `refluent settings set model-api-key-env <ENV_VAR>`';
 
 export function hookCommands(
   nodePath: string,
@@ -411,6 +424,7 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
       endpoint: { status: 'not_configured', error: null, checkedAt: nowIso() },
       dataDir: dataDir(),
       dataDirWritable: false,
+      apiKey: { status: 'not_applicable', envName: null },
       messages,
     };
   }
@@ -429,6 +443,7 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
       endpoint: { status: 'not_configured', error: null, checkedAt: nowIso() },
       dataDir: dataDir(),
       dataDirWritable: true,
+      apiKey: { status: 'not_applicable', envName: null },
       messages,
     };
   }
@@ -487,7 +502,7 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
   if (endpoint.status === 'ready') {
     messages.push('Analysis endpoint probe succeeded: ready.');
   } else if (endpoint.status === 'not_configured') {
-    messages.push('Analysis endpoint is not configured (set REFLUENT_MODEL_ENDPOINT / REFLUENT_MODEL_API_KEY / REFLUENT_MODEL).');
+    messages.push(`Analysis model is not configured. Set it with ${SET_MODEL_COMMANDS}.`);
     messages.push('Capture stays enabled but no suggestions will be produced until it is configured.');
   } else {
     messages.push(`Analysis endpoint is unreachable: ${endpoint.error ?? 'unknown error'}`);
@@ -503,6 +518,41 @@ export async function runInstall(db: DatabaseType, options: InstallOptions): Pro
     endpoint,
     dataDir: dataDir(),
     dataDirWritable: true,
+    apiKey: apiKeyStatus(db, endpointEnv),
     messages,
   };
+}
+
+function apiKeyStatus(db: DatabaseType, env: NodeJS.ProcessEnv): ApiKeyStatus {
+  const resolved = resolveModelConfig(db, env);
+  if (!resolved.env) return { status: 'not_applicable', envName: null };
+  if (resolved.env.apiKey) return { status: 'found', envName: resolved.apiKeyEnvName };
+  if (resolved.apiKeyEnvNameConfigured) return { status: 'missing', envName: resolved.apiKeyEnvNameConfigured };
+  return { status: 'not_named', envName: null };
+}
+
+/**
+ * The closing `api key` and `next` lines of `refluent install`. The first suggestion is
+ * promised only when the endpoint answered and the key is visible, so a summary that ends
+ * well never hides a key the hook cannot read.
+ */
+export function installSummary(report: InstallReport, definition: AgentDefinition): string[] {
+  if (!report.installed || report.endpoint.status !== 'ready') return [];
+  const firstSuggestion = definition.hasInjectableStatusline
+    ? `send your next message in ${definition.label} to see the first suggestion.`
+    : `your ${definition.label} messages are captured; read the suggestions with \`refluent review\`.`;
+  const { status, envName } = report.apiKey;
+  if (status === 'missing') {
+    return [
+      `  api key        : env ${envName} is not set in this shell`,
+      `  next           : make sure ${envName} is set where ${definition.label} runs, then restart ${definition.label}.`,
+    ];
+  }
+  if (status === 'not_named') {
+    return [
+      '  api key        : none (fine for a local endpoint)',
+      `  next           : ${firstSuggestion} If the endpoint needs a key, first run \`refluent settings set model-api-key-env <ENV_VAR>\`.`,
+    ];
+  }
+  return [`  api key        : read from env ${envName}`, `  next           : ${firstSuggestion}`];
 }

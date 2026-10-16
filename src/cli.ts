@@ -15,7 +15,7 @@ import {
 import { analysisClientFor } from './analysis/http.js';
 import type { AnalysisClient } from './analysis/types.js';
 import { captureMessage, runAnalysis } from './capture.js';
-import { runInstall, runUninstall, probeEndpoint, recordEndpointProbe } from './install.js';
+import { installSummary, runInstall, runUninstall, probeEndpoint, recordEndpointProbe } from './install.js';
 import {
   ALLOWED_VALUES,
   PREFERENCE_DEFAULTS,
@@ -174,7 +174,7 @@ async function installCommand(args: string[]): Promise<number> {
   out(`  ${targetLabel}  : ${settingsPath}`);
   out(`  scope          : your outgoing ${definition.label} messages only — never agent replies, code or logs.`);
   out('  effect         : the message sent to the agent is never changed or delayed.');
-  out('  analysis model : configured via REFLUENT_MODEL_ENDPOINT / REFLUENT_MODEL_API_KEY / REFLUENT_MODEL.');
+  out('  analysis model : set with `refluent settings set model-endpoint | model | model-api-key-env`.');
 
   let consent = assumeYes;
   if (!assumeYes && !assumeNo) {
@@ -206,13 +206,7 @@ async function installCommand(args: string[]): Promise<number> {
   out(`  endpoint status: ${report.endpoint.status}`);
   out(`  capture        : ${report.captureEnabled ? 'enabled' : 'not enabled'}`);
   out(`  overlay        : ${buildSettingsReport(db).overlay}`);
-  if (report.installed && report.endpoint.status === 'ready') {
-    out(
-      definition.hasInjectableStatusline
-        ? `  next           : send your next message in ${definition.label} to see the first suggestion.`
-        : `  next           : your ${definition.label} messages are captured; read the suggestions with \`refluent review\`.`,
-    );
-  }
+  for (const line of installSummary(report, definition)) out(line);
   db.close();
   return report.installed || !consent ? 0 : 1;
 }

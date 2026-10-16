@@ -14,12 +14,14 @@ import {
   setSetting,
 } from '../src/settings.js';
 import {
+  installSummary,
   probeEndpoint,
   recordEndpointProbe,
   runInstall,
   verifyHookConfig,
   writeHookConfig,
 } from '../src/install.js';
+import { agentDefinition } from '../src/agents.js';
 import { buildSettingsReport } from '../src/cli.js';
 import { HEARTBEAT_KEY, STATUS_KEY } from '../src/overlay.js';
 
@@ -195,6 +197,88 @@ describe('install: authorization, hook file and loaded state', () => {
     const reportWithEmptyEnv = buildSettingsReport(db);
     expect(reportWithEmptyEnv.model.endpoint).toBe('https://openrouter.ai/api/v1');
     expect(reportWithEmptyEnv.model.model).toBe('openai/gpt-4o-mini');
+  });
+
+  it('with no model configured, points at `refluent settings set`, not at shell variables', async () => {
+    const settingsPath = path.join(tmpDir, 'claude', 'settings.json');
+    const report = await runInstall(db, {
+      consent: true,
+      settingsPath,
+      nodePath: '/usr/local/bin/node',
+      binPath: '/tmp/bin/refluent',
+      env: {},
+    });
+    const text = report.messages.join('\n');
+    expect(text).toContain('refluent settings set model-endpoint <url>');
+    expect(text).toContain('refluent settings set model-api-key-env <ENV_VAR>');
+    expect(text).not.toContain('REFLUENT_MODEL_ENDPOINT');
+    expect(report.apiKey).toEqual({ status: 'not_applicable', envName: null });
+    expect(installSummary(report, agentDefinition('claude-code'))).toEqual([]);
+  });
+
+  it('reports a named key variable that is unset, and does not promise a suggestion', async () => {
+    const settingsPath = path.join(tmpDir, 'claude', 'settings.json');
+    setSetting(db, 'model-endpoint', 'https://openrouter.ai/api/v1');
+    setSetting(db, 'model', 'openai/gpt-4o-mini');
+    setSetting(db, 'model-api-key-env', 'OPENROUTER_API_KEY');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    const report = await runInstall(db, {
+      consent: true,
+      settingsPath,
+      nodePath: '/usr/local/bin/node',
+      binPath: '/tmp/bin/refluent',
+      env: {},
+    });
+    vi.unstubAllGlobals();
+    expect(report.endpoint.status).toBe('ready');
+    expect(report.apiKey).toEqual({ status: 'missing', envName: 'OPENROUTER_API_KEY' });
+
+    const summary = installSummary(report, agentDefinition('claude-code')).join('\n');
+    expect(summary).toContain('api key        : env OPENROUTER_API_KEY is not set in this shell');
+    expect(summary).toContain('make sure OPENROUTER_API_KEY is set where Claude Code runs');
+    expect(summary).not.toContain('to see the first suggestion');
+  });
+
+  it('promises the first suggestion once the key is visible', async () => {
+    const settingsPath = path.join(tmpDir, 'claude', 'settings.json');
+    setSetting(db, 'model-endpoint', 'https://openrouter.ai/api/v1');
+    setSetting(db, 'model', 'openai/gpt-4o-mini');
+    setSetting(db, 'model-api-key-env', 'OPENROUTER_API_KEY');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    const report = await runInstall(db, {
+      consent: true,
+      settingsPath,
+      nodePath: '/usr/local/bin/node',
+      binPath: '/tmp/bin/refluent',
+      env: { OPENROUTER_API_KEY: 'sk-test' },
+    });
+    vi.unstubAllGlobals();
+    expect(report.apiKey).toEqual({ status: 'found', envName: 'OPENROUTER_API_KEY' });
+
+    const summary = installSummary(report, agentDefinition('claude-code')).join('\n');
+    expect(summary).toContain('api key        : read from env OPENROUTER_API_KEY');
+    expect(summary).toContain('send your next message in Claude Code to see the first suggestion');
+    expect(summary).not.toContain('sk-test');
+  });
+
+  it('with no key variable named, still allows a keyless endpoint but says how to add one', async () => {
+    const settingsPath = path.join(tmpDir, 'claude', 'settings.json');
+    setSetting(db, 'model-endpoint', 'http://127.0.0.1:11434/v1');
+    setSetting(db, 'model', 'some-local-model');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    const report = await runInstall(db, {
+      consent: true,
+      settingsPath,
+      nodePath: '/usr/local/bin/node',
+      binPath: '/tmp/bin/refluent',
+      env: {},
+    });
+    vi.unstubAllGlobals();
+    expect(report.apiKey).toEqual({ status: 'not_named', envName: null });
+
+    const summary = installSummary(report, agentDefinition('claude-code')).join('\n');
+    expect(summary).toContain('api key        : none (fine for a local endpoint)');
+    expect(summary).toContain('refluent settings set model-api-key-env <ENV_VAR>');
   });
 
   it('verifyHookConfig re-reads the file so a removed registration reports not loaded', () => {
