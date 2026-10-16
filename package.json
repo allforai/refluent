@@ -2,7 +2,14 @@
   "name": "refluent",
   "version": "0.1.0",
   "license": "MIT",
-  "description": "Turn your outgoing coding-agent messages into English phrasing suggestions and durable, locally-owned knowledge points.",
+  "description": "Learn better English from the prompts you already send to coding agents",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "english-learning",
+    "cli",
+    "macos"
+  ],
   "type": "module",
   "bin": {
     "refluent": "bin/refluent"
